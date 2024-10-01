@@ -28,7 +28,8 @@ func main() {
 	// address := fmt.Sprintf("http://%s", cli.Address)
 
 	var err error
-	program := tea.NewProgram(app.InitialModel())
+	// program := tea.NewProgram(app.InitialLoginModel())
+	program := tea.NewProgram(app.InitialCommandModel())
 	if err != nil {
 
 		fmt.Printf("Uh oh, there was an error: %v\n", err)

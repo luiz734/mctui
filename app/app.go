@@ -4,22 +4,14 @@ import (
 	"fmt"
 	"log"
 
+    "mctui/colors"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
-type Color string
 
-var (
-	Surface0 = "#313244"
-	Surface1 = "#45475a"
-	Surface2 = "#585b70"
-	Pink     = "#f5c2e7"
-	Text     = "#cdd6f4"
-)
-
-type model struct {
+type loginModel struct {
 	usernameInput textinput.Model
 	passwordInput textinput.Model
 	focusUsername bool
@@ -35,15 +27,15 @@ type loginMsg struct {
 	password string
 }
 
-func InitialModel() model {
+func InitialLoginModel() loginModel {
 	ui := textinput.New()
 	ui.Placeholder = "username"
 	ui.Focus()
 	ui.CharLimit = 8
 	ui.Width = 8
 	ui.Prompt = "  "
-	ui.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(Surface1))
-	ui.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(Pink))
+	ui.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Surface1))
+	ui.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Pink))
 
 	pi := textinput.New()
 	pi.Placeholder = "********"
@@ -51,10 +43,10 @@ func InitialModel() model {
 	pi.Width = 8
 	pi.Prompt = "  "
 	pi.EchoMode = textinput.EchoPassword
-	pi.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(Surface1))
-	pi.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(Pink))
+	pi.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Surface1))
+	pi.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Pink))
 
-	return model{
+	return loginModel{
 		usernameInput: ui,
 		passwordInput: pi,
 		focusUsername: true,
@@ -62,11 +54,11 @@ func InitialModel() model {
 	}
 }
 
-func (m model) Init() tea.Cmd {
+func (m loginModel) Init() tea.Cmd {
 	return tea.Batch(textinput.Blink, tea.ClearScreen)
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -117,8 +109,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m model) View() string {
-	labelStye := lipgloss.NewStyle().Foreground(lipgloss.Color(Pink))
+func (m loginModel) View() string {
+	labelStye := lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Pink))
     usernameLabel := labelStye.Render(fmt.Sprintf("%s", "username"))
 	username :=  fmt.Sprintf("%s%s", usernameLabel, m.usernameInput.View())
 
@@ -127,8 +119,8 @@ func (m model) View() string {
 
 	var style = lipgloss.NewStyle().
 		// Border(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color(Surface0)).
-		Foreground(lipgloss.Color(Text)).
+		BorderForeground(lipgloss.Color(colors.Surface0)).
+		Foreground(lipgloss.Color(colors.Text)).
 		Padding(1).
 		PaddingLeft(2).
 		PaddingRight(2).
