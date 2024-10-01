@@ -6,12 +6,25 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+)
+
+type Color string
+
+var (
+	Surface0 = "#313244"
+	Surface1 = "#45475a"
+	Surface2 = "#585b70"
+	Pink     = "#f5c2e7"
+	Text     = "#cdd6f4"
 )
 
 type model struct {
 	usernameInput textinput.Model
 	passwordInput textinput.Model
 	focusUsername bool
+	width         int
+	height        int
 	err           error
 }
 
@@ -26,16 +39,20 @@ func InitialModel() model {
 	ui := textinput.New()
 	ui.Placeholder = "username"
 	ui.Focus()
-	ui.CharLimit = 20
-	ui.Width = 20
-	ui.Prompt = ": "
+	ui.CharLimit = 8
+	ui.Width = 8
+	ui.Prompt = "  "
+	ui.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(Surface1))
+	ui.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(Pink))
 
 	pi := textinput.New()
 	pi.Placeholder = "********"
-	pi.CharLimit = 20
-	pi.Width = 20
-	pi.Prompt = ": "
+	pi.CharLimit = 8
+	pi.Width = 8
+	pi.Prompt = "  "
 	pi.EchoMode = textinput.EchoPassword
+	pi.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(Surface1))
+	pi.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(Pink))
 
 	return model{
 		usernameInput: ui,
@@ -85,7 +102,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case loginMsg:
 		log.Printf("%s %s", msg.username, msg.password)
-        return m, tea.Quit
+		return m, tea.Quit
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, tea.ClearScreen
 	}
 
 	if m.focusUsername {
@@ -97,9 +118,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	return fmt.Sprintf(
-		"username%s\npassword%s\n",
-		m.usernameInput.View(),
-		m.passwordInput.View(),
-	) + "\n"
+	labelStye := lipgloss.NewStyle().Foreground(lipgloss.Color(Pink))
+    usernameLabel := labelStye.Render(fmt.Sprintf("%s", "username"))
+	username :=  fmt.Sprintf("%s%s", usernameLabel, m.usernameInput.View())
+
+    passwordLabel := labelStye.Render(fmt.Sprintf("%s", "password"))
+	password :=  fmt.Sprintf("%s%s", passwordLabel, m.passwordInput.View())
+
+	var style = lipgloss.NewStyle().
+		// Border(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color(Surface0)).
+		Foreground(lipgloss.Color(Text)).
+		Padding(1).
+		PaddingLeft(2).
+		PaddingRight(2).
+		Align(lipgloss.Center)
+	both := lipgloss.JoinVertical(lipgloss.Center, username, password)
+	centerWrapper := lipgloss.NewStyle().Align(lipgloss.Center, lipgloss.Center).Width(m.width - 2).Height(m.height - 3)
+
+	return fmt.Sprintf("%s\n", centerWrapper.Render(style.Render(both)))
 }
