@@ -29,7 +29,7 @@ func main() {
 
 	var err error
 	// program := tea.NewProgram(app.InitialLoginModel())
-	program := tea.NewProgram(app.InitialCommandModel())
+	program := tea.NewProgram(app.InitialCommandModel(), tea.WithMouseCellMotion(), tea.WithAltScreen())
 	if err != nil {
 
 		fmt.Printf("Uh oh, there was an error: %v\n", err)
