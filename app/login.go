@@ -81,7 +81,7 @@ func AuthenticateUser(username, password string) tea.Msg {
 	client := &http.Client{Transport: transport}
 
 	url := fmt.Sprintf(cli.Args.Address("login"))
-    log.Printf("making request to %s", url)
+	log.Printf("making request to %s", url)
 	resp, err := client.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		panic(err.Error())
@@ -144,22 +144,23 @@ func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg
 		return m, nil
 	case authMsg:
-		// Authentication works
-		if msg.sucess {
-			newModel := InitialCommandModel(msg.token, m.width, m.height)
-			log.Printf("%s", msg.token)
-            // Init is called when on tea.NewProgram()
-            // Since we are initializing it by ourself, we need to trigger it manually
-			return newModel, newModel.Init()
-		}
-		// Bad credentials
+        // Clear forms now. Then, when session expires, it is already clear
 		m.usernameInput.Focus()
 		m.usernameInput.SetValue("")
 		m.passwordInput.Blur()
 		m.passwordInput.SetValue("")
 		m.focusUsername = true
-		return m, nil
 
+		// Authentication works
+		if msg.sucess {
+			newModel := InitialCommandModel(m, msg.token, m.width, m.height)
+			log.Printf("%s", msg.token)
+			// Init is called when on tea.NewProgram()
+			// Since we are initializing it by ourself, we need to trigger it manually
+			return newModel, newModel.Init()
+		}
+		// Bad credentials
+		return m, nil
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width

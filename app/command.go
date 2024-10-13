@@ -58,7 +58,7 @@ type outputMsg struct {
 	o string
 }
 
-func InitialCommandModel(jwtToken string, width, height int) commandModel {
+func InitialCommandModel(prevModel tea.Model,jwtToken string, width, height int) commandModel {
 	ci := textinput.New()
 	ci.Placeholder = "e.g. /kill player1"
 	ci.Focus()
@@ -74,7 +74,7 @@ func InitialCommandModel(jwtToken string, width, height int) commandModel {
 		jwtToken:     jwtToken,
 		width:        width,
 		height:       height,
-		// prevModel: prevModel,
+		prevModel: prevModel,
 	}
 }
 
@@ -126,6 +126,8 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// m.viewport.SetContent(strings.Join(m.viewport.GotoBottom(), ""))
 		// m.viewport.YOffset += 1
 		return m, nil
+    case sessionExpiredMsg:
+        return m.prevModel.Update(nil)
 
 	case tea.WindowSizeMsg:
 		log.Printf("Window update message")
@@ -211,6 +213,8 @@ func (m commandModel) View() string {
 	return fmt.Sprintf("%s\n", both)
 }
 
+type sessionExpiredMsg string
+
 func sendCommand(command, jwtToken string) tea.Cmd {
 	return func() tea.Msg {
 		data := map[string]string{"command": command}
@@ -239,6 +243,11 @@ func sendCommand(command, jwtToken string) tea.Cmd {
 			panic(err.Error())
 		}
 		defer resp.Body.Close()
+
+        if resp.StatusCode != 200 {
+            log.Printf("session expired: login again")
+            return sessionExpiredMsg("session expired: login again")
+        }
 		body, err := io.ReadAll(resp.Body)
 
 		if command == "help" {
