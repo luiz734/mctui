@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -195,8 +196,14 @@ func sendCommand(command string) tea.Cmd {
 			log.Fatalf("Error marshalling JSON: %v", err)
 		}
 
-		url := fmt.Sprintf("http://localhost:8090/command")
-		resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+		transport := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+
+		client := &http.Client{Transport: transport}
+
+		url := fmt.Sprintf("https://localhost:8090/command")
+		resp, err := client.Post(url, "application/json", bytes.NewBuffer(jsonData))
 		if err != nil {
 			panic(err.Error())
 		}
