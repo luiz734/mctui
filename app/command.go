@@ -44,6 +44,8 @@ type commandModel struct {
 	history      []rconEntry
 	commandInput textinput.Model
 	viewport     viewport.Model
+	prevModel    tea.Model
+	jwtToken     string
 	ready        bool
 	width        int
 	height       int
@@ -55,7 +57,7 @@ type outputMsg struct {
 	o string
 }
 
-func InitialCommandModel() commandModel {
+func InitialCommandModel(jwtToken string, width, height int) commandModel {
 	ci := textinput.New()
 	ci.Placeholder = "e.g. /kill player1"
 	ci.Focus()
@@ -68,11 +70,27 @@ func InitialCommandModel() commandModel {
 	return commandModel{
 		commandInput: ci,
 		err:          nil,
+		jwtToken:     jwtToken,
+		width:        width,
+		height:       height,
+		// prevModel: prevModel,
 	}
 }
 
 func (m commandModel) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, tea.ClearScreen)
+	// m.viewport = viewport.New(m.width, m.height-6)
+	// m.viewport.MouseWheelEnabled = true
+	// // m.viewport.HighPerformanceRendering = useHighPerformanceRenderer
+	// m.ready = true
+
+    log.Printf("Command Initilized with size %d %d", m.width, m.height)
+	return tea.Batch(
+		textinput.Blink,
+		tea.ClearScreen,
+		func() tea.Msg { 
+            return tea.WindowSizeMsg{Width: m.width, Height: m.height} 
+        },
+	)
 }
 
 func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -85,7 +103,7 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC:
 			return m, tea.Quit
 		case tea.KeyEnter:
-			cmd = sendCommand(m.commandInput.Value())
+			cmd = sendCommand(m.commandInput.Value(), m.jwtToken)
 			m.commandInput.SetValue("")
 			return m, cmd
 		case tea.KeyCtrlJ:
@@ -109,6 +127,7 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.WindowSizeMsg:
+		log.Printf("Window update message")
 		m.width = msg.Width
 		m.height = msg.Height
 		m.commandInput.Width = m.width
@@ -143,6 +162,9 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m commandModel) View() string {
+	// if !m.ready {
+	// 	return "Initializing..."
+	// }
 	labelStye := lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Pink))
 	commandLabel := labelStye.Render(fmt.Sprintf("%s", "command"))
 	commandView := fmt.Sprintf("%s%s", commandLabel, m.commandInput.View())
@@ -188,7 +210,7 @@ func (m commandModel) View() string {
 	return fmt.Sprintf("%s\n", both)
 }
 
-func sendCommand(command string) tea.Cmd {
+func sendCommand(command, jwtToken string) tea.Cmd {
 	return func() tea.Msg {
 		data := map[string]string{"command": command}
 		jsonData, err := json.Marshal(data)
@@ -203,7 +225,15 @@ func sendCommand(command string) tea.Cmd {
 		client := &http.Client{Transport: transport}
 
 		url := fmt.Sprintf("https://localhost:8090/command")
-		resp, err := client.Post(url, "application/json", bytes.NewBuffer(jsonData))
+		req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+		if err != nil {
+			log.Fatalf("Error creating request: %v", err)
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", jwtToken))
+
+		resp, err := client.Do(req)
 		if err != nil {
 			panic(err.Error())
 		}

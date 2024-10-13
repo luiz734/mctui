@@ -1,15 +1,21 @@
 package app
 
 import (
+	"bytes"
+	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"strings"
 
-    "mctui/colors"
+	"mctui/colors"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
-
 
 type loginModel struct {
 	usernameInput textinput.Model
@@ -23,8 +29,7 @@ type loginModel struct {
 type errMsg error
 
 type loginMsg struct {
-	username string
-	password string
+	jwtToken string
 }
 
 func InitialLoginModel() loginModel {
@@ -58,6 +63,42 @@ func (m loginModel) Init() tea.Cmd {
 	return tea.Batch(textinput.Blink, tea.ClearScreen)
 }
 
+func AuthenticateUser(username, password string) tea.Msg {
+	data := map[string]string{
+		"username": username,
+		"password": password,
+	}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		log.Fatalf("Error marshalling JSON: %v", err)
+	}
+
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+
+	client := &http.Client{Transport: transport}
+
+	url := fmt.Sprintf("https://localhost:8090/login")
+	resp, err := client.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		panic(err.Error())
+	}
+	defer resp.Body.Close()
+
+	log.Printf(resp.Status)
+	body, err := io.ReadAll(resp.Body)
+
+	trimmed := strings.TrimSpace(string(body))
+
+	return authMsg{token: trimmed, sucess: resp.Status == "200 OK"}
+}
+
+type authMsg struct {
+	token  string
+	sucess bool
+}
+
 func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
@@ -67,11 +108,19 @@ func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC:
 			return m, tea.Quit
 		case tea.KeyEnter:
+			username := m.usernameInput.Value()
+			password := m.passwordInput.Value()
+
+			// Focus password if empty yet
+			if m.focusUsername && password == "" {
+				m.passwordInput.Focus()
+				m.usernameInput.Blur()
+				m.focusUsername = !m.focusUsername
+				return m, nil
+			}
+
 			return m, func() tea.Msg {
-				return loginMsg{
-					username: m.usernameInput.Value(),
-					password: m.passwordInput.Value(),
-				}
+				return AuthenticateUser(username, password)
 			}
 		}
 		switch msg.String() {
@@ -92,9 +141,24 @@ func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case errMsg:
 		m.err = msg
 		return m, nil
-	case loginMsg:
-		log.Printf("%s %s", msg.username, msg.password)
-		return m, tea.Quit
+	case authMsg:
+		// Authentication works
+		if msg.sucess {
+			newModel := InitialCommandModel(msg.token, m.width, m.height)
+			log.Printf("%s", msg.token)
+            // Init is called when on tea.NewProgram()
+            // Since we are initializing it by ourself, we need to trigger it manually
+			return newModel, newModel.Init()
+		}
+		// Bad credentials
+		m.usernameInput.Focus()
+		m.usernameInput.SetValue("")
+		m.passwordInput.Blur()
+		m.passwordInput.SetValue("")
+		m.focusUsername = true
+		return m, nil
+
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -111,11 +175,11 @@ func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m loginModel) View() string {
 	labelStye := lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Pink))
-    usernameLabel := labelStye.Render(fmt.Sprintf("%s", "username"))
-	username :=  fmt.Sprintf("%s%s", usernameLabel, m.usernameInput.View())
+	usernameLabel := labelStye.Render(fmt.Sprintf("%s", "username"))
+	username := fmt.Sprintf("%s%s", usernameLabel, m.usernameInput.View())
 
-    passwordLabel := labelStye.Render(fmt.Sprintf("%s", "password"))
-	password :=  fmt.Sprintf("%s%s", passwordLabel, m.passwordInput.View())
+	passwordLabel := labelStye.Render(fmt.Sprintf("%s", "password"))
+	password := fmt.Sprintf("%s%s", passwordLabel, m.passwordInput.View())
 
 	var style = lipgloss.NewStyle().
 		// Border(lipgloss.NormalBorder()).
