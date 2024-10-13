@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 
+	"mctui/cli"
 	"mctui/colors"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -224,7 +225,7 @@ func sendCommand(command, jwtToken string) tea.Cmd {
 
 		client := &http.Client{Transport: transport}
 
-		url := fmt.Sprintf("https://localhost:8090/command")
+		url := fmt.Sprintf(cli.Args.Address("command"))
 		req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 		if err != nil {
 			log.Fatalf("Error creating request: %v", err)

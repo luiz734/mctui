@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
+	"github.com/alecthomas/kong"
+	tea "github.com/charmbracelet/bubbletea"
 	"io"
 	"log"
 	"mctui/app"
+	"mctui/cli"
 	"os"
-
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 func main() {
@@ -23,11 +24,14 @@ func main() {
 		log.SetOutput(io.Discard)
 	}
 
-	// var cli CLI
-	// _ = kong.Parse(&cli)
-	// address := fmt.Sprintf("http://%s", cli.Address)
-
 	var err error
+
+	_ = kong.Parse(&cli.Args)
+	err = cli.Args.Validate()
+	if err != nil {
+		panic(err.Error())
+	}
+
 	// program := tea.NewProgram(app.InitialLoginModel())
 	program := tea.NewProgram(app.InitialLoginModel(), tea.WithMouseCellMotion(), tea.WithAltScreen())
 	if err != nil {

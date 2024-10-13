@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 
+	"mctui/cli"
 	"mctui/colors"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -79,7 +80,8 @@ func AuthenticateUser(username, password string) tea.Msg {
 
 	client := &http.Client{Transport: transport}
 
-	url := fmt.Sprintf("https://localhost:8090/login")
+	url := fmt.Sprintf(cli.Args.Address("login"))
+    log.Printf("making request to %s", url)
 	resp, err := client.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		panic(err.Error())
