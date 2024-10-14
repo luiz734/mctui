@@ -144,7 +144,7 @@ func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg
 		return m, nil
 	case authMsg:
-        // Clear forms now. Then, when session expires, it is already clear
+		// Clear forms now. Then, when session expires, it is already clear
 		m.usernameInput.Focus()
 		m.usernameInput.SetValue("")
 		m.passwordInput.Blur()
@@ -153,7 +153,8 @@ func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Authentication works
 		if msg.sucess {
-			newModel := InitialCommandModel(m, msg.token, m.width, m.height)
+			// newModel := InitialCommandModel(m, msg.token, m.width, m.height)
+			newModel := InitialBackupModel(msg.token, m.width, m.height)
 			log.Printf("%s", msg.token)
 			// Init is called when on tea.NewProgram()
 			// Since we are initializing it by ourself, we need to trigger it manually

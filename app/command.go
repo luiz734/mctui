@@ -58,7 +58,7 @@ type outputMsg struct {
 	o string
 }
 
-func InitialCommandModel(prevModel tea.Model,jwtToken string, width, height int) commandModel {
+func InitialCommandModel(prevModel tea.Model, jwtToken string, width, height int) commandModel {
 	ci := textinput.New()
 	ci.Placeholder = "e.g. /kill player1"
 	ci.Focus()
@@ -74,7 +74,7 @@ func InitialCommandModel(prevModel tea.Model,jwtToken string, width, height int)
 		jwtToken:     jwtToken,
 		width:        width,
 		height:       height,
-		prevModel: prevModel,
+		prevModel:    prevModel,
 	}
 }
 
@@ -84,13 +84,13 @@ func (m commandModel) Init() tea.Cmd {
 	// // m.viewport.HighPerformanceRendering = useHighPerformanceRenderer
 	// m.ready = true
 
-    log.Printf("Command Initilized with size %d %d", m.width, m.height)
+	log.Printf("Command Initilized with size %d %d", m.width, m.height)
 	return tea.Batch(
 		textinput.Blink,
 		tea.ClearScreen,
-		func() tea.Msg { 
-            return tea.WindowSizeMsg{Width: m.width, Height: m.height} 
-        },
+		func() tea.Msg {
+			return tea.WindowSizeMsg{Width: m.width, Height: m.height}
+		},
 	)
 }
 
@@ -126,8 +126,8 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// m.viewport.SetContent(strings.Join(m.viewport.GotoBottom(), ""))
 		// m.viewport.YOffset += 1
 		return m, nil
-    case sessionExpiredMsg:
-        return m.prevModel.Update(nil)
+	case sessionExpiredMsg:
+		return m.prevModel.Update(nil)
 
 	case tea.WindowSizeMsg:
 		log.Printf("Window update message")
@@ -244,10 +244,10 @@ func sendCommand(command, jwtToken string) tea.Cmd {
 		}
 		defer resp.Body.Close()
 
-        if resp.StatusCode != 200 {
-            log.Printf("session expired: login again")
-            return sessionExpiredMsg("session expired: login again")
-        }
+		if resp.StatusCode != 200 {
+			log.Printf("session expired: login again")
+			return sessionExpiredMsg("session expired: login again")
+		}
 		body, err := io.ReadAll(resp.Body)
 
 		if command == "help" {
