@@ -155,7 +155,7 @@ func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.sucess {
 			newModel := InitialCommandModel(m, msg.token, m.width, m.height)
 			// newModel := InitialBackupModel(msg.token, m.width, m.height)
-			log.Printf("%s", msg.token)
+			// log.Printf("%s", msg.token)
 			// Init is called when on tea.NewProgram()
 			// Since we are initializing it by ourself, we need to trigger it manually
 			return newModel, newModel.Init()

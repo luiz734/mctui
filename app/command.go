@@ -104,7 +104,7 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC:
 			return m, tea.Quit
 		case tea.KeyEnter:
-			cmd = sendCommand(m.commandInput.Value(), m.jwtToken)
+			cmd = parseCommand(m.commandInput.Value(), m.jwtToken)
 			m.commandInput.SetValue("")
 			return m, cmd
 		case tea.KeyCtrlJ:
@@ -130,8 +130,19 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// m.viewport.YOffset += 1
 		return m, nil
 	case restoreBackupMsg:
+		m.history = append(m.history, rconEntry{
+			command: msg.command,
+			output:  msg.body,
+		})
 		log.Printf("Backup restored")
-		return m, tea.Quit
+		return m, nil
+	case makeBackupMsg:
+		m.history = append(m.history, rconEntry{
+			command: msg.command,
+			output:  msg.body,
+		})
+		log.Printf("Backup done")
+		return m, nil
 	case sessionExpiredMsg:
 		return m.prevModel.Update(nil)
 
@@ -221,6 +232,19 @@ func (m commandModel) View() string {
 
 type sessionExpiredMsg string
 
+func parseCommand(command string, jwtToken string) tea.Cmd {
+	if strings.HasPrefix(command, "!") {
+		withoutPrefix := command[1:]
+		switch withoutPrefix {
+		case "backup":
+			return requestMakeBackup(jwtToken)
+		default:
+			return func() tea.Msg { return outputMsg{command, "Unknown command"} }
+		}
+	}
+
+	return sendCommand(command, jwtToken)
+}
 func sendCommand(command, jwtToken string) tea.Cmd {
 	return func() tea.Msg {
 		data := map[string]string{"command": command}
@@ -235,7 +259,10 @@ func sendCommand(command, jwtToken string) tea.Cmd {
 
 		client := &http.Client{Transport: transport}
 
+		// Handle special commands that starts with !
+		// e.g. !backup
 		url := fmt.Sprintf(cli.Args.Address("command"))
+
 		req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 		if err != nil {
 			log.Fatalf("Error creating request: %v", err)

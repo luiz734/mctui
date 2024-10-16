@@ -135,8 +135,61 @@ func (m backupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 type restoreBackupMsg struct {
-	status int
-	err    error
+	command string
+	body    string
+	status  int
+	err     error
+}
+
+func requestMakeBackup(jwtToken string) tea.Cmd {
+	return func() tea.Msg {
+		// data := map[string]string{"filename": backupName}
+		// jsonData, err := json.Marshal(data)
+		// if err != nil {
+		// 	log.Fatalf("Error marshalling JSON: %v", err)
+		// }
+
+		transport := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+
+		client := &http.Client{Transport: transport}
+
+		url := fmt.Sprintf(cli.Args.Address("backup"))
+		// req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+		req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte("")))
+		if err != nil {
+			log.Fatalf("Error creating request: %v", err)
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", jwtToken))
+
+		resp, err := client.Do(req)
+		if err != nil {
+			panic(err.Error())
+		}
+		defer resp.Body.Close()
+
+		var msg makeBackupMsg
+		msg.status = resp.StatusCode
+		msg.command = "!backup"
+		msg.body = fmt.Sprintf("Backup complete")
+
+		if resp.StatusCode != 200 {
+			msg.err = fmt.Errorf("Error making backup")
+			msg.command = "error"
+			msg.body = fmt.Sprintf("Error making backup")
+		}
+		return msg
+	}
+}
+
+type makeBackupMsg struct {
+	command string
+	body    string
+	status  int
+	err     error
 }
 
 func requestRestoreBackup(backupName, jwtToken string) tea.Cmd {
@@ -153,7 +206,7 @@ func requestRestoreBackup(backupName, jwtToken string) tea.Cmd {
 
 		client := &http.Client{Transport: transport}
 
-        // localhost:port/restore
+		// localhost:port/restore
 		url := fmt.Sprintf(cli.Args.Address("restore"))
 		req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 		if err != nil {
@@ -171,8 +224,13 @@ func requestRestoreBackup(backupName, jwtToken string) tea.Cmd {
 
 		var msg restoreBackupMsg
 		msg.status = resp.StatusCode
+		msg.command = "!restore"
+		msg.body = fmt.Sprintf("Restored %s", backupName)
+
 		if resp.StatusCode != 200 {
 			msg.err = fmt.Errorf("Error restoring backup")
+			msg.command = "error"
+			msg.body = fmt.Sprintf("Error restoring %s", backupName)
 		}
 		// No body. For now, just status
 		// body, err := io.ReadAll(resp.Body)
