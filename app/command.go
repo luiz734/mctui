@@ -111,6 +111,9 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.YOffset += 3
 		case tea.KeyCtrlK:
 			m.viewport.YOffset -= 3
+		case tea.KeyF1:
+			newModel := InitialBackupModel(m, m.jwtToken, m.width, m.height)
+			return newModel, newModel.Init()
 		}
 		switch msg.String() {
 		}
@@ -126,6 +129,9 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// m.viewport.SetContent(strings.Join(m.viewport.GotoBottom(), ""))
 		// m.viewport.YOffset += 1
 		return m, nil
+	case restoreBackupMsg:
+		log.Printf("Backup restored")
+		return m, tea.Quit
 	case sessionExpiredMsg:
 		return m.prevModel.Update(nil)
 
