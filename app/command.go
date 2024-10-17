@@ -130,6 +130,10 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// m.viewport.YOffset += 1
 		return m, nil
 	case restoreBackupMsg:
+		if msg.status < 0 {
+			return m, nil
+		}
+		log.Printf("error here")
 		m.history = append(m.history, rconEntry{
 			command: msg.command,
 			output:  msg.body,

@@ -109,6 +109,20 @@ func (m backupModel) Init() tea.Cmd {
 func (m backupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		switch msg.Type {
+		case tea.KeyEscape:
+			log.Printf("Escape")
+			errMsg := fmt.Errorf("Operation canceled by user")
+            // Don't return m.prevMode.Update(msg)
+			return m.prevModel, func() tea.Msg {
+				return restoreBackupMsg{
+					err:     errMsg,
+					status:  -1,
+					command: "Canceled",
+					body:    errMsg.Error(),
+				}
+			}
+		}
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
