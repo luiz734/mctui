@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dustin/go-humanize"
@@ -28,11 +29,13 @@ func (i backup) Description() string { return i.raw }
 func (i backup) FilterValue() string { return i.readable }
 
 type backupModel struct {
-	list      list.Model
-	jwtToken  string
-	prevModel tea.Model
-	width     int
-	height    int
+	list       list.Model
+	jwtToken   string
+	prevModel  tea.Model
+	width      int
+	height     int
+	loadingMsg *string
+	spinner    spinner.Model
 }
 
 type fetchMsg struct {
@@ -67,7 +70,6 @@ func fetchData(jwtToken string) tea.Cmd {
 			return sessionExpiredMsg("session expired: login again")
 		}
 		body, err := io.ReadAll(resp.Body)
-		log.Printf(string(body))
 
 		var backupNames []string
 		if err := json.Unmarshal(body, &backupNames); err != nil {
@@ -80,7 +82,6 @@ func fetchData(jwtToken string) tea.Cmd {
 			backups = append(backups, backup{readable: name})
 			readableDate, _ := HumanizeBackupDate(name)
 			items = append(items, backup{readable: readableDate, raw: name})
-			log.Printf(name)
 		}
 
 		return fetchMsg{
@@ -103,6 +104,7 @@ func (m backupModel) Init() tea.Cmd {
 		func() tea.Msg {
 			return tea.WindowSizeMsg{Width: m.width, Height: m.height}
 		},
+		m.spinner.Tick,
 	)
 }
 
@@ -113,7 +115,7 @@ func (m backupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEscape:
 			log.Printf("Escape")
 			errMsg := fmt.Errorf("Operation canceled by user")
-            // Don't return m.prevMode.Update(msg)
+			// Don't return m.prevMode.Update(msg)
 			return m.prevModel, func() tea.Msg {
 				return restoreBackupMsg{
 					err:     errMsg,
@@ -130,6 +132,8 @@ func (m backupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			b, ok := m.list.SelectedItem().(backup)
 			if ok {
 				backupName := b.raw
+				loadingMsg := "Restoring..."
+				m.loadingMsg = &loadingMsg
 				cmd := requestRestoreBackup(backupName, m.jwtToken)
 				return m, cmd
 			}
@@ -140,12 +144,18 @@ func (m backupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case fetchMsg:
 		m.list.SetItems(msg.items)
 	case restoreBackupMsg:
+		m.loadingMsg = nil
 		return m.prevModel.Update(msg)
 	}
 
+	var cmds []tea.Cmd
 	var cmd tea.Cmd
+
+	m.spinner, cmd = m.spinner.Update(msg)
+	cmds = append(cmds, cmd)
 	m.list, cmd = m.list.Update(msg)
-	return m, cmd
+	cmds = append(cmds, cmd)
+	return m, tea.Batch(cmds...)
 }
 
 type restoreBackupMsg struct {
@@ -254,11 +264,23 @@ func requestRestoreBackup(backupName, jwtToken string) tea.Cmd {
 }
 
 func (m backupModel) View() string {
+	// Render when something is loading
+	if m.loadingMsg != nil {
+		centerWrapper := lipgloss.NewStyle().Align(lipgloss.Center, lipgloss.Center).Width(m.width - 2).Height(m.height - 3)
+		str := fmt.Sprintf("%s %s", m.spinner.View(), *m.loadingMsg)
+		return centerWrapper.Render(str)
+	}
+	// Default render
 	return docStyle.Render(m.list.View())
 }
 
 func InitialBackupModel(prevModel tea.Model, jwtToken string, width, height int) backupModel {
 	items := []list.Item{}
+
+	// Spinner
+	s := spinner.New()
+	s.Spinner = spinner.Line
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
 	m := backupModel{
 		list:      list.New(items, list.NewDefaultDelegate(), 0, 0),
@@ -266,6 +288,7 @@ func InitialBackupModel(prevModel tea.Model, jwtToken string, width, height int)
 		jwtToken:  jwtToken,
 		width:     width,
 		height:    height,
+		spinner:   s,
 	}
 	m.list.Title = "Backups"
 
