@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dustin/go-humanize"
@@ -29,13 +28,13 @@ func (i backup) Description() string { return i.raw }
 func (i backup) FilterValue() string { return i.readable }
 
 type backupModel struct {
-	list       list.Model
-	jwtToken   string
-	prevModel  tea.Model
-	width      int
-	height     int
-	loadingMsg *string
-	spinner    spinner.Model
+	list      list.Model
+	jwtToken  string
+	prevModel tea.Model
+	width     int
+	height    int
+	// loadingMsg *string
+	// spinner    spinner.Model
 }
 
 type fetchMsg struct {
@@ -104,7 +103,7 @@ func (m backupModel) Init() tea.Cmd {
 		func() tea.Msg {
 			return tea.WindowSizeMsg{Width: m.width, Height: m.height}
 		},
-		m.spinner.Tick,
+		// m.spinner.Tick,
 	)
 }
 
@@ -117,11 +116,10 @@ func (m backupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			errMsg := fmt.Errorf("Operation canceled by user")
 			// Don't return m.prevMode.Update(msg)
 			return m.prevModel, func() tea.Msg {
-				return restoreBackupMsg{
-					err:     errMsg,
-					status:  -1,
-					command: "Canceled",
-					body:    errMsg.Error(),
+				return taskFinishedMsg{
+					title:  "Restore backup",
+					msg:    errMsg.Error(),
+					sucess: false,
 				}
 			}
 		}
@@ -132,10 +130,12 @@ func (m backupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			b, ok := m.list.SelectedItem().(backup)
 			if ok {
 				backupName := b.raw
-				loadingMsg := "Restoring..."
-				m.loadingMsg = &loadingMsg
-				cmd := requestRestoreBackup(backupName, m.jwtToken)
-				return m, cmd
+				// We want to return to command model
+				// We pass m.prevModel, not m
+				awaitModel := InitialAwaitModel(m.prevModel, requestRestoreBackup(backupName, m.jwtToken), m.width, m.height, "Restoring backup", "Backup restored!")
+				// cmd := requestRestoreBackup(backupName, m.jwtToken)
+				cmd := awaitModel.Init()
+				return awaitModel, cmd
 			}
 		}
 	case tea.WindowSizeMsg:
@@ -143,36 +143,32 @@ func (m backupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.list.SetSize(msg.Width-h, msg.Height-v)
 	case fetchMsg:
 		m.list.SetItems(msg.items)
-	case restoreBackupMsg:
-		m.loadingMsg = nil
+	// case restoreBackupMsg:
+	// 	// m.loadingMsg = nil
+	// 	return m.prevModel.Update(msg)
+	case taskFinishedMsg:
 		return m.prevModel.Update(msg)
 	}
 
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
 
-	m.spinner, cmd = m.spinner.Update(msg)
-	cmds = append(cmds, cmd)
+	// m.spinner, cmd = m.spinner.Update(msg)
+	// cmds = append(cmds, cmd)
 	m.list, cmd = m.list.Update(msg)
 	cmds = append(cmds, cmd)
 	return m, tea.Batch(cmds...)
 }
 
-type restoreBackupMsg struct {
-	command string
-	body    string
-	status  int
-	err     error
-}
+// type restoreBackupMsg struct {
+// 	command string
+// 	body    string
+// 	status  int
+// 	err     error
+// }
 
 func requestMakeBackup(jwtToken string) tea.Cmd {
 	return func() tea.Msg {
-		// data := map[string]string{"filename": backupName}
-		// jsonData, err := json.Marshal(data)
-		// if err != nil {
-		// 	log.Fatalf("Error marshalling JSON: %v", err)
-		// }
-
 		transport := &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		}
@@ -180,7 +176,6 @@ func requestMakeBackup(jwtToken string) tea.Cmd {
 		client := &http.Client{Transport: transport}
 
 		url := fmt.Sprintf(cli.Args.Address("backup"))
-		// req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
 		req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte("")))
 		if err != nil {
 			log.Fatalf("Error creating request: %v", err)
@@ -195,26 +190,40 @@ func requestMakeBackup(jwtToken string) tea.Cmd {
 		}
 		defer resp.Body.Close()
 
-		var msg makeBackupMsg
-		msg.status = resp.StatusCode
-		msg.command = "!backup"
-		msg.body = fmt.Sprintf("Backup complete")
-
-		if resp.StatusCode != 200 {
-			msg.err = fmt.Errorf("Error making backup")
-			msg.command = "error"
-			msg.body = fmt.Sprintf("Error making backup")
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
 		}
+
+		var msg taskFinishedMsg
+		msg.title = "Make Backup"
+		msg.msg = fmt.Sprintf("%d %s", resp.StatusCode, "Backup complete")
+		msg.sucess = true
+		if resp.StatusCode != 200 {
+			msg.msg = fmt.Sprintf("%s", body)
+            msg.sucess = false
+		}
+
 		return msg
+		// msg.status = resp.StatusCode
+		// msg.command = "!backup"
+		// msg.body = fmt.Sprintf("Backup complete")
+		//
+		// if resp.StatusCode != 200 {
+		// 	msg.err = fmt.Errorf("Error making backup")
+		// 	msg.command = "error"
+		// 	msg.body = fmt.Sprintf("Error making backup")
+		// }
+		// return msg
 	}
 }
 
-type makeBackupMsg struct {
-	command string
-	body    string
-	status  int
-	err     error
-}
+// type makeBackupMsg struct {
+// 	command string
+// 	body    string
+// 	status  int
+// 	err     error
+// }
 
 func requestRestoreBackup(backupName, jwtToken string) tea.Cmd {
 	return func() tea.Msg {
@@ -246,30 +255,44 @@ func requestRestoreBackup(backupName, jwtToken string) tea.Cmd {
 		}
 		defer resp.Body.Close()
 
-		var msg restoreBackupMsg
-		msg.status = resp.StatusCode
-		msg.command = "!restore"
-		msg.body = fmt.Sprintf("Restored %s", backupName)
-
-		if resp.StatusCode != 200 {
-			msg.err = fmt.Errorf("Error restoring backup")
-			msg.command = "error"
-			msg.body = fmt.Sprintf("Error restoring %s", backupName)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
 		}
-		// No body. For now, just status
-		// body, err := io.ReadAll(resp.Body)
+
+		var msg taskFinishedMsg
+		msg.title = "Restore backup"
+		msg.msg = fmt.Sprintf("%d %s", resp.StatusCode, "Backup restored")
+		msg.sucess = true
+		if resp.StatusCode != 200 {
+			msg.msg = fmt.Sprintf("%s", body)
+			msg.sucess = false
+		}
 
 		return msg
+		// var msg restoreBackupMsg
+		// msg.status = resp.StatusCode
+		// msg.command = "!restore"
+		// msg.body = fmt.Sprintf("Restored %s", backupName)
+		//
+		// if resp.StatusCode != 200 {
+		// 	msg.err = fmt.Errorf("Error restoring backup")
+		// 	msg.command = "error"
+		// 	msg.body = fmt.Sprintf("Error restoring %s", backupName)
+		// }
+		// No body. For now, just status
+		// body, err := io.ReadAll(resp.Body)
+		// return msg
 	}
 }
 
 func (m backupModel) View() string {
 	// Render when something is loading
-	if m.loadingMsg != nil {
-		centerWrapper := lipgloss.NewStyle().Align(lipgloss.Center, lipgloss.Center).Width(m.width - 2).Height(m.height - 3)
-		str := fmt.Sprintf("%s %s", m.spinner.View(), *m.loadingMsg)
-		return centerWrapper.Render(str)
-	}
+	// if m.loadingMsg != nil {
+	// 	centerWrapper := lipgloss.NewStyle().Align(lipgloss.Center, lipgloss.Center).Width(m.width - 2).Height(m.height - 3)
+	// 	str := fmt.Sprintf("%s %s", m.spinner.View(), *m.loadingMsg)
+	// 	return centerWrapper.Render(str)
+	// }
 	// Default render
 	return docStyle.Render(m.list.View())
 }
@@ -278,9 +301,9 @@ func InitialBackupModel(prevModel tea.Model, jwtToken string, width, height int)
 	items := []list.Item{}
 
 	// Spinner
-	s := spinner.New()
-	s.Spinner = spinner.Line
-	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	// s := spinner.New()
+	// s.Spinner = spinner.Line
+	// s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
 	m := backupModel{
 		list:      list.New(items, list.NewDefaultDelegate(), 0, 0),
@@ -288,7 +311,7 @@ func InitialBackupModel(prevModel tea.Model, jwtToken string, width, height int)
 		jwtToken:  jwtToken,
 		width:     width,
 		height:    height,
-		spinner:   s,
+		// spinner:    s,
 	}
 	m.list.Title = "Backups"
 

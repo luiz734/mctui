@@ -115,12 +115,7 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			newModel := InitialBackupModel(m, m.jwtToken, m.width, m.height)
 			return newModel, newModel.Init()
 		}
-		switch msg.String() {
-		}
 
-	case errMsg:
-		m.err = msg
-		return m, nil
 	case outputMsg:
 		m.history = append(m.history, rconEntry{
 			command: msg.c,
@@ -129,22 +124,24 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// m.viewport.SetContent(strings.Join(m.viewport.GotoBottom(), ""))
 		// m.viewport.YOffset += 1
 		return m, nil
-	case restoreBackupMsg:
-		if msg.status < 0 {
-			return m, nil
-		}
+	// case restoreBackupMsg:
+	// 	if msg.status < 0 {
+	// 		return m, nil
+	// 	}
+	// 	m.history = append(m.history, rconEntry{
+	// 		command: msg.command,
+	// 		output:  msg.body,
+	// 	})
+	// 	log.Printf("Backup restored")
+	// 	return m, nil
+
+	// We get the message forwarded from awaitModel
+	case taskFinishedMsg:
 		m.history = append(m.history, rconEntry{
-			command: msg.command,
-			output:  msg.body,
+			command: msg.title,
+			output:  msg.msg,
 		})
-		log.Printf("Backup restored")
-		return m, nil
-	case makeBackupMsg:
-		m.history = append(m.history, rconEntry{
-			command: msg.command,
-			output:  msg.body,
-		})
-		log.Printf("Backup done")
+		log.Printf("Append task %s to history", msg.title)
 		return m, nil
 	case sessionExpiredMsg:
 		return m.prevModel.Update(nil)
