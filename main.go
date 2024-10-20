@@ -33,7 +33,8 @@ func main() {
 	}
 
 	// program := tea.NewProgram(app.InitialLoginModel())
-	program := tea.NewProgram(app.InitialLoginModel(), tea.WithMouseCellMotion(), tea.WithAltScreen())
+	// program := tea.NewProgram(app.InitialLoginModel(), tea.WithMouseCellMotion(), tea.WithAltScreen())
+	program := tea.NewProgram(app.InitialAwaitModel(10, 10, "wait the timer", "done"), tea.WithMouseCellMotion(), tea.WithAltScreen())
 	if err != nil {
 
 		fmt.Printf("Uh oh, there was an error: %v\n", err)

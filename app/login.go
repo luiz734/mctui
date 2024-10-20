@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"os"
 	"strings"
+	"time"
 
 	"mctui/cli"
 	"mctui/colors"
@@ -26,8 +29,6 @@ type loginModel struct {
 	height        int
 	err           error
 }
-
-type errMsg error
 
 type loginMsg struct {
 	jwtToken string
@@ -76,29 +77,39 @@ func AuthenticateUser(username, password string) tea.Msg {
 
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		DialContext: (&net.Dialer{
+			Timeout: 5 * time.Second, // Timeout for connection setup
+		}).DialContext,
+		TLSHandshakeTimeout: 5 * time.Second,
 	}
 
-	client := &http.Client{Transport: transport}
-
+	client := &http.Client{Transport: transport, Timeout: 5 * time.Second}
 	url := fmt.Sprintf(cli.Args.Address("login"))
-	log.Printf("making request to %s", url)
+
+	log.Printf("Making request to %s", url)
 	resp, err := client.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		panic(err.Error())
+		var errMsg error
+		if os.IsTimeout(err) {
+			errMsg = fmt.Errorf("timeout error: %w", err)
+		} else {
+			errMsg = fmt.Errorf("error making request: %w", err)
+		}
+		return authMsg{
+			err: errMsg,
+		}
 	}
 	defer resp.Body.Close()
 
-	log.Printf(resp.Status)
 	body, err := io.ReadAll(resp.Body)
-
 	trimmed := strings.TrimSpace(string(body))
-
 	return authMsg{token: trimmed, sucess: resp.Status == "200 OK"}
 }
 
 type authMsg struct {
 	token  string
 	sucess bool
+	err    error
 }
 
 func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -139,11 +150,11 @@ func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.focusUsername = !m.focusUsername
 		}
 
-	// We handle errors just like any other message
-	case errMsg:
-		m.err = msg
-		return m, nil
 	case authMsg:
+		if msg.err != nil {
+			log.Printf("Can't login: %v", msg.err)
+			return m, tea.Quit
+		}
 		// Clear forms now. Then, when session expires, it is already clear
 		m.usernameInput.Focus()
 		m.usernameInput.SetValue("")
