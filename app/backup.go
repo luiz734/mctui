@@ -33,8 +33,6 @@ type backupModel struct {
 	prevModel tea.Model
 	width     int
 	height    int
-	// loadingMsg *string
-	// spinner    spinner.Model
 }
 
 type fetchMsg struct {
@@ -153,22 +151,14 @@ func (m backupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
 
-	// m.spinner, cmd = m.spinner.Update(msg)
-	// cmds = append(cmds, cmd)
 	m.list, cmd = m.list.Update(msg)
 	cmds = append(cmds, cmd)
 	return m, tea.Batch(cmds...)
 }
 
-// type restoreBackupMsg struct {
-// 	command string
-// 	body    string
-// 	status  int
-// 	err     error
-// }
-
 func requestMakeBackup(jwtToken string) tea.Cmd {
 	return func() tea.Msg {
+		log.Printf("Enter requestMakeBackup")
 		transport := &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		}
@@ -195,13 +185,15 @@ func requestMakeBackup(jwtToken string) tea.Cmd {
 			panic(err)
 		}
 
+		log.Printf("Return code: %d", resp.StatusCode)
+
 		var msg taskFinishedMsg
 		msg.title = "Make Backup"
 		msg.msg = fmt.Sprintf("%d %s", resp.StatusCode, "Backup complete")
 		msg.sucess = true
 		if resp.StatusCode != 200 {
 			msg.msg = fmt.Sprintf("%s", body)
-            msg.sucess = false
+			msg.sucess = false
 		}
 
 		return msg

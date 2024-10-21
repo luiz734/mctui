@@ -5,18 +5,16 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io"
-	"log"
-	"net/http"
-	"strings"
-
-	"mctui/cli"
-	"mctui/colors"
-
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"io"
+	"log"
+	"mctui/cli"
+	"mctui/colors"
+	"net/http"
+	"strings"
 )
 
 var useHighPerformanceRenderer = true
@@ -104,9 +102,12 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC:
 			return m, tea.Quit
 		case tea.KeyEnter:
-			cmd = parseCommand(m.commandInput.Value(), m.jwtToken)
+			log.Printf("Read user input: %s", m.commandInput.Value())
 			m.commandInput.SetValue("")
-			return m, cmd
+			_ = parseCommand(m, m.commandInput.Value(), m.jwtToken)
+			awaitModel := InitialAwaitModel(m, requestMakeBackup(m.jwtToken), m.width, m.height, "Making backup", "Backup done!")
+			cmd := awaitModel.Init()
+			return awaitModel, cmd
 		case tea.KeyCtrlJ:
 			m.viewport.YOffset += 3
 		case tea.KeyCtrlK:
@@ -121,8 +122,6 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			command: msg.c,
 			output:  msg.o,
 		})
-		// m.viewport.SetContent(strings.Join(m.viewport.GotoBottom(), ""))
-		// m.viewport.YOffset += 1
 		return m, nil
 	// case restoreBackupMsg:
 	// 	if msg.status < 0 {
@@ -232,14 +231,20 @@ func (m commandModel) View() string {
 
 type sessionExpiredMsg string
 
-func parseCommand(command string, jwtToken string) tea.Cmd {
+func parseCommand(m tea.Model, command string, jwtToken string) tea.Cmd {
 	if strings.HasPrefix(command, "!") {
 		withoutPrefix := command[1:]
 		switch withoutPrefix {
 		case "backup":
 			return requestMakeBackup(jwtToken)
 		default:
-			return func() tea.Msg { return outputMsg{command, "Unknown command"} }
+			return func() tea.Msg {
+				return taskFinishedMsg{
+					title:  "Unknown command",
+					msg:    "Command %s not valid",
+					sucess: false,
+				}
+			}
 		}
 	}
 
