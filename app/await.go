@@ -31,6 +31,7 @@ type taskFinishedMsg struct {
 	title  string
 	msg    string
 	sucess bool
+	async  bool
 }
 
 func InitialAwaitModel(

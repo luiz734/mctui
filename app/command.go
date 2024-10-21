@@ -92,6 +92,10 @@ func (m commandModel) Init() tea.Cmd {
 	)
 }
 
+func isTask(command string) bool {
+	return strings.HasPrefix(command, "!")
+}
+
 func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
@@ -102,12 +106,25 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC:
 			return m, tea.Quit
 		case tea.KeyEnter:
-			log.Printf("Read user input: %s", m.commandInput.Value())
+			log.Printf("User input: %s", m.commandInput.Value())
+			userCmd := m.commandInput.Value()
 			m.commandInput.SetValue("")
-			_ = parseCommand(m, m.commandInput.Value(), m.jwtToken)
-			awaitModel := InitialAwaitModel(m, requestMakeBackup(m.jwtToken), m.width, m.height, "Making backup", "Backup done!")
-			cmd := awaitModel.Init()
-			return awaitModel, cmd
+			taskCmd, err := parseCommand(m, userCmd, m.jwtToken)
+			// Input start with ! but invalid
+			// We handle that
+			if err != nil {
+				log.Printf("%v", err)
+				return m, taskCmd
+			}
+			// Command not start with !
+			// RCON will handle that
+			if isTask(userCmd) {
+				awaitModel := InitialAwaitModel(m, taskCmd, m.width, m.height, "Making backup", "Backup done!")
+				cmd := awaitModel.Init()
+				return awaitModel, cmd
+			}
+			return m, taskCmd
+
 		case tea.KeyCtrlJ:
 			m.viewport.YOffset += 3
 		case tea.KeyCtrlK:
@@ -231,24 +248,25 @@ func (m commandModel) View() string {
 
 type sessionExpiredMsg string
 
-func parseCommand(m tea.Model, command string, jwtToken string) tea.Cmd {
+func parseCommand(m tea.Model, command string, jwtToken string) (tea.Cmd, error) {
 	if strings.HasPrefix(command, "!") {
 		withoutPrefix := command[1:]
 		switch withoutPrefix {
 		case "backup":
-			return requestMakeBackup(jwtToken)
+			return requestMakeBackup(jwtToken), nil
 		default:
 			return func() tea.Msg {
 				return taskFinishedMsg{
-					title:  "Unknown command",
-					msg:    "Command %s not valid",
+					title:  "Unknown task",
+					msg:    fmt.Sprintf("Task %s not valid", command),
 					sucess: false,
+					async:  false,
 				}
-			}
+			}, fmt.Errorf("Unknown task %s", command)
 		}
 	}
-
-	return sendCommand(command, jwtToken)
+	log.Printf("Not a task. Skip await screen later")
+	return sendCommand(command, jwtToken), nil
 }
 func sendCommand(command, jwtToken string) tea.Cmd {
 	return func() tea.Msg {
