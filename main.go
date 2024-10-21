@@ -12,6 +12,7 @@ import (
 )
 
 func main() {
+	// Redirect log output to file
 	if len(os.Getenv("DEBUG")) > 0 {
 		f, err := tea.LogToFile("debug.log", "debug")
 		if err != nil {
@@ -24,8 +25,8 @@ func main() {
 		log.SetOutput(io.Discard)
 	}
 
+	// Parse CLI args
 	var err error
-
 	_ = kong.Parse(&cli.Args)
 	err = cli.Args.Validate()
 	if err != nil {
@@ -33,11 +34,13 @@ func main() {
 	}
 
 	// program := tea.NewProgram(app.InitialLoginModel())
-	program := tea.NewProgram(app.InitialLoginModel(), tea.WithMouseCellMotion(), tea.WithAltScreen())
-	// program := tea.NewProgram(app.InitialAwaitModel(10, 10, "wait the timer", "done"), tea.WithMouseCellMotion(), tea.WithAltScreen())
+	program := tea.NewProgram(
+		app.InitialLoginModel(),
+		tea.WithMouseCellMotion(),
+		tea.WithAltScreen(),
+	)
 	if err != nil {
-
-		fmt.Printf("Uh oh, there was an error: %v\n", err)
+		log.Printf("Error running program: %v", err)
 	}
 	program.Run()
 

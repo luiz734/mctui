@@ -14,7 +14,6 @@ var Args CliArgs
 type CliArgs struct {
 	Host string `short:"a" name:"host" default:"localhost" help:"Host"`
 	Port int    `short:"p" name:"port" help:"Port" required:""`
-	// Foo  string `name:"foo" required:""`
 }
 
 func (a CliArgs) Validate() error {

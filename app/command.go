@@ -19,12 +19,36 @@ import (
 
 var useHighPerformanceRenderer = true
 
-type rconEntry struct {
+// Main screen
+// Displays a history and a command prompt
+type commandModel struct {
+	history      []commandOutputMsg
+	commandInput textinput.Model
+	viewport     viewport.Model
+	prevModel    tea.Model
+	jwtToken     string
+	ready        bool
+	width        int
+	height       int
+	err          error
+}
+
+// Send after rcon commands, tasks
+// Can also display error values
+// Used to append to history
+type commandOutputMsg struct {
 	command string
 	output  string
 }
 
-func (e *rconEntry) View() string {
+// type rconEntry struct {
+// 	command string
+// 	output  string
+// }
+
+type sessionExpiredMsg string
+
+func (e *commandOutputMsg) View() string {
 	commandStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(colors.Pink)).
 		Bold(true)
@@ -37,23 +61,6 @@ func (e *rconEntry) View() string {
 	both := fmt.Sprintf("%s\n%s\n", commandStr, outputStr)
 	return both
 
-}
-
-type commandModel struct {
-	history      []rconEntry
-	commandInput textinput.Model
-	viewport     viewport.Model
-	prevModel    tea.Model
-	jwtToken     string
-	ready        bool
-	width        int
-	height       int
-	err          error
-}
-
-type outputMsg struct {
-	c string
-	o string
 }
 
 func InitialCommandModel(prevModel tea.Model, jwtToken string, width, height int) commandModel {
@@ -134,12 +141,13 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return newModel, newModel.Init()
 		}
 
-	case outputMsg:
-		m.history = append(m.history, rconEntry{
-			command: msg.c,
-			output:  msg.o,
-		})
-		return m, nil
+	case commandOutputMsg:
+		m.history = append(m.history, msg)
+		// m.history = append(m.history, commandOutputMsg{
+		// 	command: msg.command,
+		// 	output:  msg.output,
+		// })
+		// return m, nil
 	// case restoreBackupMsg:
 	// 	if msg.status < 0 {
 	// 		return m, nil
@@ -153,17 +161,18 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// We get the message forwarded from awaitModel
 	case taskFinishedMsg:
-		m.history = append(m.history, rconEntry{
+		m.history = append(m.history, commandOutputMsg{
 			command: msg.title,
 			output:  msg.msg,
 		})
 		log.Printf("Append task %s to history", msg.title)
 		return m, nil
+
+	// Go back to login screen
 	case sessionExpiredMsg:
 		return m.prevModel.Update(nil)
 
 	case tea.WindowSizeMsg:
-		log.Printf("Window update message")
 		m.width = msg.Width
 		m.height = msg.Height
 		m.commandInput.Width = m.width
@@ -191,9 +200,9 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	m.commandInput, cmd = m.commandInput.Update(msg)
 	cmds = append(cmds, cmd)
-
 	m.viewport, cmd = m.viewport.Update(msg)
 	cmds = append(cmds, cmd)
+
 	return m, tea.Batch(cmds...)
 }
 
@@ -214,11 +223,6 @@ func (m commandModel) View() string {
 	lines.WriteString("\n")
 
 	historyStyle := lipgloss.NewStyle()
-	// Border(lipgloss.RoundedBorder()).
-	// BorderForeground(lipgloss.Color(colors.Surface1)).
-	// Padding(1, 4).
-	// Width(m.width - 2).
-	// Height(m.height - 4)
 
 	viewportStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -226,27 +230,13 @@ func (m commandModel) View() string {
 		Padding(1, 4).
 		Width(m.width - 2).
 		Height(m.height - 4)
-
-		// var style = lipgloss.NewStyle().
-		// 	// Border(lipgloss.NormalBorder()).
-		// 	BorderForeground(lipgloss.Color(colors.Surface0)).
-		// 	Foreground(lipgloss.Color(colors.Text)).
-		// 	Padding(1).
-		// 	PaddingLeft(2).
-		// 	PaddingRight(2).
-		// 	Align(lipgloss.Center)
 	m.viewport.SetContent(historyStyle.Render(lines.String()))
+
 	both := lipgloss.JoinVertical(lipgloss.Left,
-		// historyStyle.Render(lines.String()),
 		viewportStyle.Render(m.viewport.View()),
 		commandView)
-	// centerWrapper := lipgloss.NewStyle().Align(lipgloss.Center, lipgloss.Center).Width(m.width - 2).Height(m.height - 3)
-
-	// return fmt.Sprintf("%s\n", centerWrapper.Render(style.Render(both)))
 	return fmt.Sprintf("%s\n", both)
 }
-
-type sessionExpiredMsg string
 
 func parseCommand(m tea.Model, command string, jwtToken string) (tea.Cmd, error) {
 	if strings.HasPrefix(command, "!") {
@@ -264,6 +254,12 @@ func parseCommand(m tea.Model, command string, jwtToken string) (tea.Cmd, error)
 				}
 			}, fmt.Errorf("Unknown task %s", command)
 		}
+	}
+	// Remove dangerous commands e.g. "stop" or "list stop"
+	if !commandIsSafe(command) {
+		return func() tea.Msg {
+			return commandOutputMsg{command, "You can't stop the server"}
+		}, nil
 	}
 	log.Printf("Not a task. Skip await screen later")
 	return sendCommand(command, jwtToken), nil
@@ -307,10 +303,22 @@ func sendCommand(command, jwtToken string) tea.Cmd {
 		body, err := io.ReadAll(resp.Body)
 
 		if command == "help" {
-			return outputMsg{command, parseHelpOutput(string(body))}
+			return commandOutputMsg{command, parseHelpOutput(string(body))}
 		}
-		return outputMsg{command, string(body)}
+		return commandOutputMsg{command, string(body)}
 	}
+}
+
+// Check for "stop" inside command
+// e.g. "list stop"
+func commandIsSafe(command string) bool {
+	tokens := strings.Split(command, " ")
+	for _, t := range tokens {
+		if t == "stop" {
+			return false
+		}
+	}
+	return true
 }
 
 func parseHelpOutput(output string) string {
