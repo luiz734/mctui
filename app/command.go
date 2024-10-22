@@ -115,6 +115,14 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter:
 			log.Printf("User input: %s", m.commandInput.Value())
 			userCmd := m.commandInput.Value()
+
+			// Quick hack. Windows doesn't like f1 shortcut
+			if userCmd == "!restore" {
+				m.commandInput.SetValue("")
+				newModel := InitialBackupModel(m, m.jwtToken, m.width, m.height)
+				return newModel, newModel.Init()
+			}
+
 			m.commandInput.SetValue("")
 			taskCmd, err := parseCommand(m, userCmd, m.jwtToken)
 			// Input start with ! but invalid
