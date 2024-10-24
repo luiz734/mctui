@@ -44,7 +44,7 @@ func InitialLoginModel() loginModel {
 	ui := textinput.New()
 	ui.Placeholder = "username"
 	ui.Focus()
-	ui.CharLimit = 8
+	ui.CharLimit = 16
 	ui.Width = 8
 	ui.Prompt = "  "
 	ui.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Surface1))
@@ -52,7 +52,7 @@ func InitialLoginModel() loginModel {
 
 	pi := textinput.New()
 	pi.Placeholder = "********"
-	pi.CharLimit = 8
+	pi.CharLimit = 16
 	pi.Width = 8
 	pi.Prompt = "  "
 	pi.EchoMode = textinput.EchoPassword
