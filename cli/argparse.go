@@ -17,8 +17,11 @@ type CliArgs struct {
 }
 
 func (a CliArgs) Validate() error {
+	if a.Port == 0 {
+		return fmt.Errorf("you must specify a port")
+	}
 	if a.Port < PORT_MIN || a.Port > PORT_MAX {
-		return fmt.Errorf("Port out of range")
+		return fmt.Errorf("port out of range")
 	}
 	return nil
 }
