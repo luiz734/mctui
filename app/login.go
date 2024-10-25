@@ -59,6 +59,10 @@ func InitialLoginModel() loginModel {
 	pi.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Surface1))
 	pi.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Pink))
 
+    // Use for debug only
+    ui.SetValue("admin")
+    pi.SetValue("adminpass123")
+
 	return loginModel{
 		usernameInput: ui,
 		passwordInput: pi,
@@ -93,7 +97,7 @@ func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			return m, func() tea.Msg {
 				// Returns an authMsg
-				return authenticateUser(username, password)
+				return requestAuthenticateUser(username, password)
 			}
 		case tea.KeyTab:
 			if m.focusUsername {
@@ -164,7 +168,7 @@ func (m loginModel) View() string {
 	return fmt.Sprintf("%s\n", centerWrapper.Render(style.Render(both)))
 }
 
-func authenticateUser(username, password string) tea.Msg {
+func requestAuthenticateUser(username, password string) tea.Msg {
 	data := map[string]string{
 		"username": username,
 		"password": password,

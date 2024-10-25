@@ -5,19 +5,20 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"io"
 	"log"
 	"mctui/cli"
 	"mctui/colors"
 	"net/http"
 	"strings"
+
+	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
-var useHighPerformanceRenderer = true
+var useHighPerformanceRenderer = false
 
 // Main screen
 // Displays a history and a command prompt
@@ -43,27 +44,11 @@ type commandOutputMsg struct {
 
 type sessionExpiredMsg string
 
-func (e *commandOutputMsg) View() string {
-	commandStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(colors.Pink)).
-		Bold(true)
-	commandStr := commandStyle.Render(e.command)
-
-	outputStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(colors.Surface2))
-	outputStr := outputStyle.Render(e.output)
-
-	both := fmt.Sprintf("%s\n%s\n", commandStr, outputStr)
-	return both
-
-}
-
 func InitialCommandModel(prevModel tea.Model, jwtToken string, width, height int) commandModel {
 	ci := textinput.New()
 	ci.Placeholder = "e.g. kill player1"
 	ci.Focus()
 	ci.CharLimit = 128
-	// ui.Width = 8
 	ci.Prompt = "> "
 	ci.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Surface1))
 	ci.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Pink))
@@ -79,11 +64,6 @@ func InitialCommandModel(prevModel tea.Model, jwtToken string, width, height int
 }
 
 func (m commandModel) Init() tea.Cmd {
-	// m.viewport = viewport.New(m.width, m.height-6)
-	// m.viewport.MouseWheelEnabled = true
-	// // m.viewport.HighPerformanceRendering = useHighPerformanceRenderer
-	// m.ready = true
-
 	log.Printf("Command Initilized with size %d %d", m.width, m.height)
 	return tea.Batch(
 		textinput.Blink,
@@ -92,6 +72,37 @@ func (m commandModel) Init() tea.Cmd {
 			return tea.WindowSizeMsg{Width: m.width, Height: m.height}
 		},
 	)
+}
+
+// Break strings with len > chunkSize into multiple strings
+// e.g. "foobar", chunkSize=2 becomes ["fo", "ob", "ar"]
+func chunkString(s string, chunkSize int) []string {
+	var chunks []string
+	for i := 0; i < len(s); i += chunkSize {
+		end := i + chunkSize
+		if end > len(s) {
+			end = len(s)
+		}
+		chunks = append(chunks, s[i:end])
+	}
+	return chunks
+}
+
+func (e *commandOutputMsg) View(windowWidth int) string {
+	commandStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(colors.Pink)).
+		Bold(true)
+	commandStr := commandStyle.Render(e.command)
+
+	outputStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(colors.Surface2)).
+		Background(lipgloss.Color(colors.Surface0))
+	chunked := strings.Join(chunkString(e.output, windowWidth), "\n")
+	outputStr := outputStyle.Render(chunked)
+
+	both := fmt.Sprintf("%s\n%s\n", commandStr, outputStr)
+	return both
+
 }
 
 func isTask(command string) bool {
@@ -132,10 +143,14 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, taskCmd
 
-		case tea.KeyCtrlJ:
-			m.viewport.YOffset += 3
-		case tea.KeyCtrlK:
-			m.viewport.YOffset -= 3
+		// case tea.KeyCtrlJ:
+		// 	log.Printf("offset before %d", m.viewport.YOffset)
+		// 	m.viewport.YOffset += 3
+		// 	log.Printf("offset after %d", m.viewport.YOffset)
+		// case tea.KeyCtrlK:
+		// 	log.Printf("offset before %d", m.viewport.YOffset)
+		// 	m.viewport.YOffset -= 3
+		// 	log.Printf("offset after %d", m.viewport.YOffset)
 		case tea.KeyF1:
 			newModel := InitialBackupModel(m, m.jwtToken, m.width, m.height)
 			return newModel, newModel.Init()
@@ -143,6 +158,10 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case commandOutputMsg:
 		m.history = append(m.history, msg)
+		m.viewport.SetContent(m.ViewHistory())
+		if m.viewport.TotalLineCount() > m.height {
+			m.viewport.GotoBottom()
+		}
 
 	// We get the message forwarded from awaitModel
 	case taskFinishedMsg:
@@ -151,7 +170,10 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			output:  msg.msg,
 		})
 		log.Printf("Append task %s to history", msg.title)
-		return m, nil
+		m.viewport.SetContent(m.ViewHistory())
+		if m.viewport.TotalLineCount() > m.height {
+			m.viewport.GotoBottom()
+		}
 
 	// Go back to login screen
 	case sessionExpiredMsg:
@@ -161,26 +183,24 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.commandInput.Width = m.width
+		marginVertical := lipgloss.Height(m.commandInput.View())
 
 		if !m.ready {
-			// Since this program is using the full size of the viewport we
-			// need to wait until we've received the window dimensions before
-			// we can initialize the viewport. The initial dimensions come in
-			// quickly, though asynchronously, which is why we wait for them
-			// here.
-			m.viewport = viewport.New(msg.Width, msg.Height-6)
+			m.viewport = viewport.New(msg.Width, msg.Height-marginVertical)
 			m.viewport.MouseWheelEnabled = true
-			// m.viewport.HighPerformanceRendering = useHighPerformanceRenderer
+			m.viewport.YPosition = 0
 			m.ready = true
+		} else {
+			m.viewport.Width = msg.Width
+			m.viewport.Height = msg.Height - marginVertical
 		}
-		if useHighPerformanceRenderer {
-			// Render (or re-render) the whole viewport. Necessary both to
-			// initialize the viewport and when the window is resized.
-			//
-			// This is needed for high-performance rendering only.
-			// cmds = append(cmds, viewport.Sync(m.viewport))
+		m.viewport.SetContent(m.ViewHistory())
+		if m.viewport.TotalLineCount() > m.height {
+			m.viewport.GotoBottom()
 		}
-		return m, tea.ClearScreen
+		// m.viewport.GotoBottom()
+		// m.viewport.LineUp(m.height - 1)
+		// return m, tea.ClearScreen
 	}
 
 	m.commandInput, cmd = m.commandInput.Update(msg)
@@ -191,36 +211,47 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m commandModel) View() string {
-	// if !m.ready {
-	// 	return "Initializing..."
-	// }
-	labelStye := lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Pink))
-	commandLabel := labelStye.Render(fmt.Sprintf("%s", "command"))
-	commandView := fmt.Sprintf("%s%s", commandLabel, m.commandInput.View())
-
+func (m commandModel) ViewHistory() string {
 	var lines strings.Builder
 	for _, command := range m.history {
-		line := command.View()
+		line := command.View(m.width)
 		lines.WriteString(line)
 		lines.WriteString("\n")
 	}
 	lines.WriteString("\n")
 
-	historyStyle := lipgloss.NewStyle()
+	return lines.String()
+}
 
-	viewportStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(colors.Surface1)).
-		Padding(1, 4).
-		Width(m.width - 2).
-		Height(m.height - 4)
-	m.viewport.SetContent(historyStyle.Render(lines.String()))
+func (m commandModel) View() string {
+	labelStye := lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Pink))
+	scrollPercent := m.viewport.ScrollPercent() * 100
+	commandLabel := labelStye.Render(fmt.Sprintf("%.2f%%%s", scrollPercent, "command"))
+	commandView := fmt.Sprintf("%s%s", commandLabel, m.commandInput.View())
+	commandView = lipgloss.NewStyle().Margin(1, 0, 0, 0).Render(commandView)
+	// historyStyle := lipgloss.NewStyle()
+	// _ = lipgloss.NewStyle().
+	// 	Border(lipgloss.RoundedBorder()).
+	// 	BorderForeground(lipgloss.Color(colors.Surface1)).
+	// 	Padding(1, 4).
+	// 	Width(m.width - 2).
+	// 	Height(m.height - 4)
+
+    // NEVER set the viewport content here
+    // The scroll will not work
+    // Always update its content in the update function
+	// m.viewport.SetContent((lines.String()))
+	// m.viewport.SetContent(m.viewport.View() + m.commandInput.Value())
+
+	commandHeight := lipgloss.Height(commandView)
+    // todo: remove this and any attempt to change state
+	m.viewport.Height = m.height - commandHeight
+	_ = commandView
 
 	both := lipgloss.JoinVertical(lipgloss.Left,
-		viewportStyle.Render(m.viewport.View()),
+		m.viewport.View(),
 		commandView)
-	return fmt.Sprintf("%s\n", both)
+	return fmt.Sprintf("%s", both)
 }
 
 func parseCommand(m tea.Model, command string, jwtToken string) tea.Cmd {
@@ -230,17 +261,17 @@ func parseCommand(m tea.Model, command string, jwtToken string) tea.Cmd {
 		case "!backup":
 			return requestMakeBackup(jwtToken)
 		default:
-			return sendTask(withoutPrefix, jwtToken)
+			return requestSendTask(withoutPrefix, jwtToken)
 		}
 	}
 
 	log.Printf("Not a task. Skip await screen later")
-	return sendCommand(command, jwtToken)
+	return requestSendCommand(command, jwtToken)
 }
 
 // Tasks starts with !
 // e.g. !start !stop
-func sendTask(taskName, jwtToken string) tea.Cmd {
+func requestSendTask(taskName, jwtToken string) tea.Cmd {
 	return func() tea.Msg {
 		data := map[string]string{"task": taskName}
 		jsonData, err := json.Marshal(data)
@@ -289,7 +320,7 @@ func sendTask(taskName, jwtToken string) tea.Cmd {
 	}
 }
 
-func sendCommand(command, jwtToken string) tea.Cmd {
+func requestSendCommand(command, jwtToken string) tea.Cmd {
 	return func() tea.Msg {
 		data := map[string]string{"command": command}
 		jsonData, err := json.Marshal(data)
@@ -320,25 +351,28 @@ func sendCommand(command, jwtToken string) tea.Cmd {
 		defer resp.Body.Close()
 
 		if resp.StatusCode != 200 {
-            log.Printf("Bad command: %s", command)
+			log.Printf("Bad command: %s", command)
 			// return sessionExpiredMsg("session expired: login again")
 		}
 		body, err := io.ReadAll(resp.Body)
 
 		if command == "help" {
-			return commandOutputMsg{command, parseHelpOutput(string(body))}
+			return commandOutputMsg{command, cleanHelpOutput(string(body))}
 		}
 		return commandOutputMsg{command, string(body)}
 	}
 }
 
-func parseHelpOutput(output string) string {
+func cleanHelpOutput(output string) string {
 	var parsedBuilder strings.Builder
 
 	lines := strings.Split(output, "/")
 	for _, line := range lines {
-		parsedBuilder.WriteString(fmt.Sprintf("%s\n", line))
+		withoutArgs := strings.SplitN(line, " ", 2)
+		parsedBuilder.WriteString(fmt.Sprintf("%s, ", withoutArgs[0]))
 	}
 
-	return parsedBuilder.String()
+	trimCommas := strings.Trim(parsedBuilder.String(), " , ")
+	// return parsedBuilder.String()
+	return trimCommas
 }
