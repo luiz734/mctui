@@ -41,11 +41,6 @@ type commandOutputMsg struct {
 	output  string
 }
 
-// type rconEntry struct {
-// 	command string
-// 	output  string
-// }
-
 type sessionExpiredMsg string
 
 func (e *commandOutputMsg) View() string {
@@ -65,7 +60,7 @@ func (e *commandOutputMsg) View() string {
 
 func InitialCommandModel(prevModel tea.Model, jwtToken string, width, height int) commandModel {
 	ci := textinput.New()
-	ci.Placeholder = "e.g. /kill player1"
+	ci.Placeholder = "e.g. kill player1"
 	ci.Focus()
 	ci.CharLimit = 128
 	// ui.Width = 8
@@ -124,17 +119,14 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			m.commandInput.SetValue("")
-			taskCmd, err := parseCommand(m, userCmd, m.jwtToken)
-			// Input start with ! but invalid
-			// We handle that
-			if err != nil {
-				log.Printf("%v", err)
-				return m, taskCmd
-			}
-			// Command not start with !
-			// RCON will handle that
+			taskCmd := parseCommand(m, userCmd, m.jwtToken)
+
+			// Tasks may take some time
+			// Change to the awaitModel
 			if isTask(userCmd) {
-				awaitModel := InitialAwaitModel(m, taskCmd, m.width, m.height, "Making backup", "Backup done!")
+				msgLoading := fmt.Sprintf("Waiting for task %s", userCmd)
+				msgDone := fmt.Sprintf("Task %s done!", userCmd)
+				awaitModel := InitialAwaitModel(m, taskCmd, m.width, m.height, msgLoading, msgDone)
 				cmd := awaitModel.Init()
 				return awaitModel, cmd
 			}
@@ -151,21 +143,6 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case commandOutputMsg:
 		m.history = append(m.history, msg)
-		// m.history = append(m.history, commandOutputMsg{
-		// 	command: msg.command,
-		// 	output:  msg.output,
-		// })
-		// return m, nil
-	// case restoreBackupMsg:
-	// 	if msg.status < 0 {
-	// 		return m, nil
-	// 	}
-	// 	m.history = append(m.history, rconEntry{
-	// 		command: msg.command,
-	// 		output:  msg.body,
-	// 	})
-	// 	log.Printf("Backup restored")
-	// 	return m, nil
 
 	// We get the message forwarded from awaitModel
 	case taskFinishedMsg:
@@ -246,32 +223,72 @@ func (m commandModel) View() string {
 	return fmt.Sprintf("%s\n", both)
 }
 
-func parseCommand(m tea.Model, command string, jwtToken string) (tea.Cmd, error) {
+func parseCommand(m tea.Model, command string, jwtToken string) tea.Cmd {
 	if strings.HasPrefix(command, "!") {
 		withoutPrefix := command[1:]
-		switch withoutPrefix {
-		case "backup":
-			return requestMakeBackup(jwtToken), nil
+		switch command {
+		case "!backup":
+			return requestMakeBackup(jwtToken)
 		default:
-			return func() tea.Msg {
-				return taskFinishedMsg{
-					title:  "Unknown task",
-					msg:    fmt.Sprintf("Task %s not valid", command),
-					sucess: false,
-					async:  false,
-				}
-			}, fmt.Errorf("Unknown task %s", command)
+			return sendTask(withoutPrefix, jwtToken)
 		}
 	}
-	// Remove dangerous commands e.g. "stop" or "list stop"
-	if !commandIsSafe(command) {
-		return func() tea.Msg {
-			return commandOutputMsg{command, "You can't stop the server"}
-		}, nil
-	}
+
 	log.Printf("Not a task. Skip await screen later")
-	return sendCommand(command, jwtToken), nil
+	return sendCommand(command, jwtToken)
 }
+
+// Tasks starts with !
+// e.g. !start !stop
+func sendTask(taskName, jwtToken string) tea.Cmd {
+	return func() tea.Msg {
+		data := map[string]string{"task": taskName}
+		jsonData, err := json.Marshal(data)
+		if err != nil {
+			log.Fatalf("Error marshalling JSON: %v", err)
+		}
+
+		transport := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+
+		client := &http.Client{Transport: transport}
+
+		url := fmt.Sprintf(cli.Args.Address("task"))
+
+		req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+		if err != nil {
+			log.Fatalf("Error creating request: %v", err)
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", jwtToken))
+
+		resp, err := client.Do(req)
+		if err != nil {
+			panic(err.Error())
+		}
+		defer resp.Body.Close()
+
+		// if resp.StatusCode != 200 {
+		// 	log.Printf("Session expired: login again")
+		// 	return sessionExpiredMsg("Session expired: login again")
+		// }
+		body, err := io.ReadAll(resp.Body)
+
+		var msg taskFinishedMsg
+		msg.title = taskName
+		msg.msg = fmt.Sprintf("%d %s", resp.StatusCode, body)
+		msg.sucess = true
+		if resp.StatusCode != 200 {
+			msg.msg = fmt.Sprintf("%s", body)
+			msg.sucess = false
+		}
+
+		return msg
+	}
+}
+
 func sendCommand(command, jwtToken string) tea.Cmd {
 	return func() tea.Msg {
 		data := map[string]string{"command": command}
@@ -315,18 +332,6 @@ func sendCommand(command, jwtToken string) tea.Cmd {
 		}
 		return commandOutputMsg{command, string(body)}
 	}
-}
-
-// Check for "stop" inside command
-// e.g. "list stop"
-func commandIsSafe(command string) bool {
-	tokens := strings.Split(command, " ")
-	for _, t := range tokens {
-		if t == "stop" {
-			return false
-		}
-	}
-	return true
 }
 
 func parseHelpOutput(output string) string {
