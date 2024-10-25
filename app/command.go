@@ -303,8 +303,6 @@ func sendCommand(command, jwtToken string) tea.Cmd {
 
 		client := &http.Client{Transport: transport}
 
-		// Handle special commands that starts with !
-		// e.g. !backup
 		url := fmt.Sprintf(cli.Args.Address("command"))
 
 		req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
@@ -322,8 +320,8 @@ func sendCommand(command, jwtToken string) tea.Cmd {
 		defer resp.Body.Close()
 
 		if resp.StatusCode != 200 {
-			log.Printf("session expired: login again")
-			return sessionExpiredMsg("session expired: login again")
+            log.Printf("Bad command: %s", command)
+			// return sessionExpiredMsg("session expired: login again")
 		}
 		body, err := io.ReadAll(resp.Body)
 
