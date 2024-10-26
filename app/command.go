@@ -112,16 +112,9 @@ func isTask(command string) bool {
 func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
-	var skipViewportUpdate bool
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		// Viewport scrolls by default
-		// We don't want that
-		case "j", "k":
-			skipViewportUpdate = true
-		}
 		switch msg.Type {
 		case tea.KeyCtrlC:
 			return m, tea.Quit
@@ -180,6 +173,8 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if !m.ready {
 			m.viewport = viewport.New(msg.Width, msg.Height-marginVertical)
+			// Remove default keymaps
+			m.viewport.KeyMap = viewport.KeyMap{}
 			m.viewport.MouseWheelEnabled = true
 			m.viewport.YPosition = 0
 			m.ready = true
@@ -188,33 +183,25 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.Height = msg.Height - marginVertical
 		}
 		m = m.updateViewportContent()
-		// m.viewport.GotoBottom()
-		// m.viewport.LineUp(m.height - 1)
-		// return m, tea.ClearScreen
 	}
 
 	m.commandInput, cmd = m.commandInput.Update(msg)
 	cmds = append(cmds, cmd)
-
-    // Skip when user press j or k
-    // It uses vim keybinds
-	if !skipViewportUpdate {
-		m.viewport, cmd = m.viewport.Update(msg)
-		cmds = append(cmds, cmd)
-	}
+	m.viewport, cmd = m.viewport.Update(msg)
+	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
 }
 
 func (m commandModel) updateViewportContent() commandModel {
-	m.viewport.SetContent(m.ViewHistory())
+	m.viewport.SetContent(m.HistoryView())
 	if m.viewport.TotalLineCount() > m.height {
 		m.viewport.GotoBottom()
 	}
 	return m
 }
 
-func (m commandModel) ViewHistory() string {
+func (m commandModel) HistoryView() string {
 	var lines strings.Builder
 	for _, command := range m.history {
 		line := command.View(m.width)
@@ -235,25 +222,6 @@ func (m commandModel) promptView() string {
 }
 
 func (m commandModel) View() string {
-	// historyStyle := lipgloss.NewStyle()
-	// _ = lipgloss.NewStyle().
-	// 	Border(lipgloss.RoundedBorder()).
-	// 	BorderForeground(colors.Surface1).
-	// 	Padding(1, 4).
-	// 	Width(m.width - 2).
-	// 	Height(m.height - 4)
-
-	// NEVER set the viewport content here
-	// The scroll will not work
-	// Always update its content in the update function
-	// m.viewport.SetContent((lines.String()))
-	// m.viewport.SetContent(m.viewport.View() + m.commandInput.Value())
-
-	// commandHeight := lipgloss.Height(commandView)
-	// todo: remove this and any attempt to change state
-	// m.viewport.Height = m.height - commandHeight
-	// _ = commandView
-
 	both := lipgloss.JoinVertical(lipgloss.Left,
 		m.viewport.View(),
 		m.promptView())
