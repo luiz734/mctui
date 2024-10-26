@@ -47,8 +47,8 @@ func InitialLoginModel() loginModel {
 	ui.CharLimit = 16
 	ui.Width = 8
 	ui.Prompt = "  "
-	ui.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Surface1))
-	ui.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Pink))
+	ui.PlaceholderStyle = lipgloss.NewStyle().Foreground(colors.Surface1)
+	ui.PromptStyle = lipgloss.NewStyle().Foreground(colors.Pink)
 
 	pi := textinput.New()
 	pi.Placeholder = "********"
@@ -56,8 +56,8 @@ func InitialLoginModel() loginModel {
 	pi.Width = 8
 	pi.Prompt = "  "
 	pi.EchoMode = textinput.EchoPassword
-	pi.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Surface1))
-	pi.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Pink))
+	pi.PlaceholderStyle = lipgloss.NewStyle().Foreground(colors.Surface1)
+	pi.PromptStyle = lipgloss.NewStyle().Foreground(colors.Pink)
 
     // Use for debug only
     ui.SetValue("admin")
@@ -147,7 +147,7 @@ func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m loginModel) View() string {
-	labelStye := lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Pink))
+	labelStye := lipgloss.NewStyle().Foreground(colors.Pink)
 	usernameLabel := labelStye.Render(fmt.Sprintf("%s", "username"))
 	username := fmt.Sprintf("%s%s", usernameLabel, m.usernameInput.View())
 
@@ -156,8 +156,8 @@ func (m loginModel) View() string {
 
 	var style = lipgloss.NewStyle().
 		// Border(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color(colors.Surface0)).
-		Foreground(lipgloss.Color(colors.Text)).
+		BorderForeground(colors.Surface0).
+		Foreground(colors.Text).
 		Padding(1).
 		PaddingLeft(2).
 		PaddingRight(2).

@@ -50,8 +50,8 @@ func InitialCommandModel(prevModel tea.Model, jwtToken string, width, height int
 	ci.Focus()
 	ci.CharLimit = 128
 	ci.Prompt = "> "
-	ci.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Surface1))
-	ci.PromptStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Pink))
+	ci.PlaceholderStyle = lipgloss.NewStyle().Foreground(colors.Surface1)
+	ci.PromptStyle = lipgloss.NewStyle().Foreground(colors.Pink)
 
 	return commandModel{
 		commandInput: ci,
@@ -90,13 +90,13 @@ func chunkString(s string, chunkSize int) []string {
 
 func (e *commandOutputMsg) View(windowWidth int) string {
 	commandStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(colors.Pink)).
+		Foreground(colors.Pink).
 		Bold(true)
 	commandStr := commandStyle.Render(e.command)
 
 	outputStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(colors.Surface2)).
-		Background(lipgloss.Color(colors.Surface0))
+		Foreground(colors.Surface2).
+		Background(colors.Surface0)
 	chunked := strings.Join(chunkString(e.output, windowWidth), "\n")
 	outputStr := outputStyle.Render(chunked)
 
@@ -112,9 +112,16 @@ func isTask(command string) bool {
 func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
+	var skipViewportUpdate bool
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		switch msg.String() {
+		// Viewport scrolls by default
+		// We don't want that
+		case "j", "k":
+			skipViewportUpdate = true
+		}
 		switch msg.Type {
 		case tea.KeyCtrlC:
 			return m, tea.Quit
@@ -143,14 +150,6 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, taskCmd
 
-		// case tea.KeyCtrlJ:
-		// 	log.Printf("offset before %d", m.viewport.YOffset)
-		// 	m.viewport.YOffset += 3
-		// 	log.Printf("offset after %d", m.viewport.YOffset)
-		// case tea.KeyCtrlK:
-		// 	log.Printf("offset before %d", m.viewport.YOffset)
-		// 	m.viewport.YOffset -= 3
-		// 	log.Printf("offset after %d", m.viewport.YOffset)
 		case tea.KeyF1:
 			newModel := InitialBackupModel(m, m.jwtToken, m.width, m.height)
 			return newModel, newModel.Init()
@@ -158,10 +157,7 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case commandOutputMsg:
 		m.history = append(m.history, msg)
-		m.viewport.SetContent(m.ViewHistory())
-		if m.viewport.TotalLineCount() > m.height {
-			m.viewport.GotoBottom()
-		}
+		m = m.updateViewportContent()
 
 	// We get the message forwarded from awaitModel
 	case taskFinishedMsg:
@@ -170,10 +166,7 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			output:  msg.msg,
 		})
 		log.Printf("Append task %s to history", msg.title)
-		m.viewport.SetContent(m.ViewHistory())
-		if m.viewport.TotalLineCount() > m.height {
-			m.viewport.GotoBottom()
-		}
+		m = m.updateViewportContent()
 
 	// Go back to login screen
 	case sessionExpiredMsg:
@@ -183,7 +176,7 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.commandInput.Width = m.width
-		marginVertical := lipgloss.Height(m.commandInput.View())
+		marginVertical := lipgloss.Height(m.promptView())
 
 		if !m.ready {
 			m.viewport = viewport.New(msg.Width, msg.Height-marginVertical)
@@ -194,10 +187,7 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.Width = msg.Width
 			m.viewport.Height = msg.Height - marginVertical
 		}
-		m.viewport.SetContent(m.ViewHistory())
-		if m.viewport.TotalLineCount() > m.height {
-			m.viewport.GotoBottom()
-		}
+		m = m.updateViewportContent()
 		// m.viewport.GotoBottom()
 		// m.viewport.LineUp(m.height - 1)
 		// return m, tea.ClearScreen
@@ -205,10 +195,23 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	m.commandInput, cmd = m.commandInput.Update(msg)
 	cmds = append(cmds, cmd)
-	m.viewport, cmd = m.viewport.Update(msg)
-	cmds = append(cmds, cmd)
+
+    // Skip when user press j or k
+    // It uses vim keybinds
+	if !skipViewportUpdate {
+		m.viewport, cmd = m.viewport.Update(msg)
+		cmds = append(cmds, cmd)
+	}
 
 	return m, tea.Batch(cmds...)
+}
+
+func (m commandModel) updateViewportContent() commandModel {
+	m.viewport.SetContent(m.ViewHistory())
+	if m.viewport.TotalLineCount() > m.height {
+		m.viewport.GotoBottom()
+	}
+	return m
 }
 
 func (m commandModel) ViewHistory() string {
@@ -223,34 +226,37 @@ func (m commandModel) ViewHistory() string {
 	return lines.String()
 }
 
-func (m commandModel) View() string {
-	labelStye := lipgloss.NewStyle().Foreground(lipgloss.Color(colors.Pink))
-	scrollPercent := m.viewport.ScrollPercent() * 100
-	commandLabel := labelStye.Render(fmt.Sprintf("%.2f%%%s", scrollPercent, "command"))
+func (m commandModel) promptView() string {
+	labelStye := lipgloss.NewStyle().Foreground(colors.Pink)
+	commandLabel := labelStye.Render(fmt.Sprintf("%s", "command"))
 	commandView := fmt.Sprintf("%s%s", commandLabel, m.commandInput.View())
 	commandView = lipgloss.NewStyle().Margin(1, 0, 0, 0).Render(commandView)
+	return commandView
+}
+
+func (m commandModel) View() string {
 	// historyStyle := lipgloss.NewStyle()
 	// _ = lipgloss.NewStyle().
 	// 	Border(lipgloss.RoundedBorder()).
-	// 	BorderForeground(lipgloss.Color(colors.Surface1)).
+	// 	BorderForeground(colors.Surface1).
 	// 	Padding(1, 4).
 	// 	Width(m.width - 2).
 	// 	Height(m.height - 4)
 
-    // NEVER set the viewport content here
-    // The scroll will not work
-    // Always update its content in the update function
+	// NEVER set the viewport content here
+	// The scroll will not work
+	// Always update its content in the update function
 	// m.viewport.SetContent((lines.String()))
 	// m.viewport.SetContent(m.viewport.View() + m.commandInput.Value())
 
-	commandHeight := lipgloss.Height(commandView)
-    // todo: remove this and any attempt to change state
-	m.viewport.Height = m.height - commandHeight
-	_ = commandView
+	// commandHeight := lipgloss.Height(commandView)
+	// todo: remove this and any attempt to change state
+	// m.viewport.Height = m.height - commandHeight
+	// _ = commandView
 
 	both := lipgloss.JoinVertical(lipgloss.Left,
 		m.viewport.View(),
-		commandView)
+		m.promptView())
 	return fmt.Sprintf("%s", both)
 }
 
