@@ -77,6 +77,10 @@ func (m commandModel) Init() tea.Cmd {
 // Break strings with len > chunkSize into multiple strings
 // e.g. "foobar", chunkSize=2 becomes ["fo", "ob", "ar"]
 func chunkString(s string, chunkSize int) []string {
+	// Multiline responses may behave weird
+	// We could do some fancy logic to handle it
+	// but remove newlines is good enough
+	s = strings.ReplaceAll(s, "\n", " ")
 	var chunks []string
 	for i := 0; i < len(s); i += chunkSize {
 		end := i + chunkSize
@@ -95,8 +99,8 @@ func (e *commandOutputMsg) View(windowWidth int) string {
 	commandStr := commandStyle.Render(e.command)
 
 	outputStyle := lipgloss.NewStyle().
-		Foreground(colors.Surface2).
-		Background(colors.Surface0)
+		Foreground(colors.Surface2)
+		// Background(colors.Surface0)
 	chunked := strings.Join(chunkString(e.output, windowWidth), "\n")
 	outputStr := outputStyle.Render(chunked)
 
@@ -118,6 +122,9 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyCtrlC:
 			return m, tea.Quit
+        case tea.KeyCtrlL:
+            m.history = nil
+            m = m.updateViewportContent()
 		case tea.KeyEnter:
 			log.Printf("User input: %s", m.commandInput.Value())
 			userCmd := m.commandInput.Value()
@@ -280,9 +287,12 @@ func requestSendTask(taskName, jwtToken string) tea.Cmd {
 		// 	return sessionExpiredMsg("Session expired: login again")
 		// }
 		body, err := io.ReadAll(resp.Body)
+		// Response may contain newlines or spaces
+		// Who knows
+		body = []byte(strings.Trim(string(body), " \n"))
 
 		var msg taskFinishedMsg
-		msg.title = taskName
+		msg.title = "!" + taskName
 		msg.msg = fmt.Sprintf("%d %s", resp.StatusCode, body)
 		msg.sucess = true
 		if resp.StatusCode != 200 {
@@ -330,8 +340,11 @@ func requestSendCommand(command, jwtToken string) tea.Cmd {
 		}
 		body, err := io.ReadAll(resp.Body)
 
-		if command == "help" {
+		if command == "help" && resp.StatusCode == 200 {
 			return commandOutputMsg{command, cleanHelpOutput(string(body))}
+		}
+		if command == "" {
+			command = "<empty>"
 		}
 		return commandOutputMsg{command, string(body)}
 	}

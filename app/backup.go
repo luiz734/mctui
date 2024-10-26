@@ -149,7 +149,7 @@ func requestMakeBackup(jwtToken string) tea.Cmd {
 		log.Printf("Return code: %d", resp.StatusCode)
 
 		var msg taskFinishedMsg
-		msg.title = "Make Backup"
+		msg.title = "!backup"
 		msg.msg = fmt.Sprintf("%d %s", resp.StatusCode, "Backup complete")
 		msg.sucess = true
 		if resp.StatusCode != 200 {
@@ -197,7 +197,7 @@ func requestRestoreBackup(backupName, jwtToken string) tea.Cmd {
 		}
 
 		var msg taskFinishedMsg
-		msg.title = "Restore backup"
+		msg.title = "!restore"
 		msg.msg = fmt.Sprintf("%d %s", resp.StatusCode, "Backup restored")
 		msg.sucess = true
 		if resp.StatusCode != 200 {
