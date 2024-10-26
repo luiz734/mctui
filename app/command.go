@@ -23,7 +23,9 @@ var useHighPerformanceRenderer = false
 // Main screen
 // Displays a history and a command prompt
 type commandModel struct {
-	history      []commandOutputMsg
+	history []commandOutputMsg
+	// Used to fill the input wuen user press Up/Down arrows
+	historyIndex int
 	commandInput textinput.Model
 	viewport     viewport.Model
 	prevModel    tea.Model
@@ -113,6 +115,15 @@ func isTask(command string) bool {
 	return strings.HasPrefix(command, "!")
 }
 
+func clamp(i, minVal, maxVal int) int {
+	if i < minVal {
+		return minVal
+	} else if i > maxVal {
+		return maxVal
+	}
+	return i
+}
+
 func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
@@ -122,12 +133,39 @@ func (m commandModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyCtrlC:
 			return m, tea.Quit
-        case tea.KeyCtrlL:
-            m.history = nil
-            m = m.updateViewportContent()
+
+			// Clear the screen
+		case tea.KeyCtrlL:
+			m.history = nil
+			m = m.updateViewportContent()
+			m.commandInput.SetValue("")
+
+			// Fill the input with previous commands
+		case tea.KeyUp:
+			m.historyIndex = clamp(m.historyIndex+1, 0, len(m.history))
+			if m.historyIndex > 0 {
+				m.commandInput.SetValue(m.history[len(m.history)-m.historyIndex].command)
+				if m.commandInput.Value() == "<empty>" {
+					m.commandInput.SetValue("")
+				}
+				m.commandInput.SetCursor(m.commandInput.CharLimit)
+			}
+		case tea.KeyDown:
+			m.historyIndex = clamp(m.historyIndex-1, 0, len(m.history))
+			if m.historyIndex > 0 {
+				m.commandInput.SetValue(m.history[len(m.history)-m.historyIndex].command)
+				if m.commandInput.Value() == "<empty>" {
+					m.commandInput.SetValue("")
+				}
+			} else if m.historyIndex == 0 {
+				m.commandInput.SetValue("")
+				m.commandInput.SetCursor(m.commandInput.CharLimit)
+			}
+
 		case tea.KeyEnter:
 			log.Printf("User input: %s", m.commandInput.Value())
 			userCmd := m.commandInput.Value()
+			m.historyIndex = 0
 
 			// Quick hack. Windows doesn't like f1 shortcut
 			if userCmd == "!restore" {

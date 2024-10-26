@@ -67,7 +67,7 @@ func (m backupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Don't return m.prevMode.Update(msg)
 			return m.prevModel, func() tea.Msg {
 				return taskFinishedMsg{
-					title:  "Restore backup",
+					title:  "!restore",
 					msg:    errMsg.Error(),
 					sucess: false,
 				}
