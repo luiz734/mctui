@@ -16,6 +16,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/reflow/wordwrap"
 )
 
 var useHighPerformanceRenderer = false
@@ -76,24 +77,6 @@ func (m commandModel) Init() tea.Cmd {
 	)
 }
 
-// Break strings with len > chunkSize into multiple strings
-// e.g. "foobar", chunkSize=2 becomes ["fo", "ob", "ar"]
-func chunkString(s string, chunkSize int) []string {
-	// Multiline responses may behave weird
-	// We could do some fancy logic to handle it
-	// but remove newlines is good enough
-	s = strings.ReplaceAll(s, "\n", " ")
-	var chunks []string
-	for i := 0; i < len(s); i += chunkSize {
-		end := i + chunkSize
-		if end > len(s) {
-			end = len(s)
-		}
-		chunks = append(chunks, s[i:end])
-	}
-	return chunks
-}
-
 func (e *commandOutputMsg) View(windowWidth int) string {
 	commandStyle := lipgloss.NewStyle().
 		Foreground(colors.Pink).
@@ -103,12 +86,22 @@ func (e *commandOutputMsg) View(windowWidth int) string {
 	outputStyle := lipgloss.NewStyle().
 		Foreground(colors.Surface2)
 		// Background(colors.Surface0)
-	chunked := strings.Join(chunkString(e.output, windowWidth), "\n")
-	outputStr := outputStyle.Render(chunked)
+
+    // Wrap on newline characters
+	wrapped := wrapCommandOutput(e.output, windowWidth)
+	outputStr := outputStyle.Render(wrapped)
 
 	both := fmt.Sprintf("%s\n%s\n", commandStr, outputStr)
 	return both
+}
 
+func wrapCommandOutput(output string, windowWidth int) string {
+	w := wordwrap.NewWriter(windowWidth)
+	defer w.Close()
+	w.Breakpoints = []rune{' '}
+	w.Newline = []rune{'\n'}
+	w.Write([]byte(output))
+	return w.String()
 }
 
 func isTask(command string) bool {
