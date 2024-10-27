@@ -12,8 +12,9 @@ const (
 var Args CliArgs
 
 type CliArgs struct {
-	Host string `short:"a" name:"host" default:"localhost" help:"Host"`
-	Port int    `short:"p" name:"port" help:"Port" required:""`
+	Host          string `short:"a" name:"host" default:"localhost" help:"Host"`
+	Port          int    `short:"p" name:"port" help:"Port" required:""`
+	TimeOffsetMin int    `short:"t" name:"time-offset" help:"Time offset used to diplay the backup time" default:"0"`
 }
 
 func (a CliArgs) Validate() error {

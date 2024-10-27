@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+
 	"mctui/cli"
 	"net/http"
 	"time"
@@ -20,12 +21,38 @@ import (
 var docStyle = lipgloss.NewStyle().Margin(1, 2)
 
 type backup struct {
-	readable, raw string
+	Time     time.Time
+	Filename string
 }
 
-func (i backup) Title() string       { return i.readable }
-func (i backup) Description() string { return i.raw }
-func (i backup) FilterValue() string { return i.readable }
+func NewBackup(filename string) (*backup, error) {
+	const layout = "backup-2006-01-02-15-04-05.zip"
+	t, err := time.Parse(layout, filename)
+	if err != nil {
+		return nil, fmt.Errorf("can't parse time in filename: %w", err)
+	}
+	return &backup{
+		Time:     t,
+		Filename: filename,
+	}, nil
+}
+func (b backup) OffsetBy(d time.Duration) backup {
+	b.Time = b.Time.Add(d)
+	return b
+}
+
+func (b backup) timeHumanized() string {
+	return humanize.Time(b.Time)
+}
+
+// Use the cli arg to offset the time
+func (i backup) Title() string {
+	return i.OffsetBy(time.Minute * time.Duration(cli.Args.TimeOffsetMin)).timeHumanized()
+}
+func (i backup) Description() string { return i.Filename }
+func (i backup) FilterValue() string {
+	return i.OffsetBy(time.Minute * time.Duration(cli.Args.TimeOffsetMin)).timeHumanized()
+}
 
 type backupModel struct {
 	list      list.Model
@@ -79,7 +106,7 @@ func (m backupModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			b, ok := m.list.SelectedItem().(backup)
 			if ok {
-				backupName := b.raw
+				backupName := b.Filename
 				// We want to return to command model
 				// We pass m.prevModel, not m
 				awaitModel := InitialAwaitModel(m.prevModel, requestRestoreBackup(backupName, m.jwtToken), m.width, m.height, "Restoring backup", "Backup restored!")
@@ -246,21 +273,17 @@ func fetchData(jwtToken string) tea.Cmd {
 		var backups []backup
 		var items []list.Item
 		for _, name := range backupNames {
-			backups = append(backups, backup{readable: name})
-			readableDate, _ := HumanizeBackupDate(name)
-			items = append(items, backup{readable: readableDate, raw: name})
+			b, err := NewBackup(name)
+			if err != nil {
+				log.Printf("Skip backup with bad name: %v", err)
+				continue
+			}
+			backups = append(backups, *b)
+			items = append(items, *b)
 		}
 
 		return fetchMsg{
 			items: items,
 		}
 	}
-}
-func HumanizeBackupDate(filename string) (string, error) {
-	const layout = "backup-2006-01-02-15-04-05.zip"
-	t, err := time.Parse(layout, filename)
-	if err != nil {
-		return "", err
-	}
-	return humanize.Time(t), nil
 }
