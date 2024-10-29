@@ -87,7 +87,7 @@ func (e *commandOutputMsg) View(windowWidth int) string {
 		Foreground(colors.Surface2)
 		// Background(colors.Surface0)
 
-    // Wrap on newline characters
+		// Wrap on newline characters
 	wrapped := wrapCommandOutput(e.output, windowWidth)
 	outputStr := outputStyle.Render(wrapped)
 
@@ -96,12 +96,30 @@ func (e *commandOutputMsg) View(windowWidth int) string {
 }
 
 func wrapCommandOutput(output string, windowWidth int) string {
+	// This library has a weird behaviour when the last
+	// world just disapears when there is no wrap
+	// windowWidth > len(outptut)
+	// This seems to fix the problem
+	output += " "
+
 	w := wordwrap.NewWriter(windowWidth)
 	defer w.Close()
 	w.Breakpoints = []rune{' '}
 	w.Newline = []rune{'\n'}
 	w.Write([]byte(output))
+
 	return w.String()
+
+	// if _, err := w.Write([]byte(output)); err != nil {
+	// 	log.Fatalf("can't wrap text: %v", err)
+	// }
+	// s := w.String()
+	//    if len(s) == 0 {
+	//        return output
+	//    }
+	//    return s
+
+	return wordwrap.String(output, windowWidth)
 }
 
 func isTask(command string) bool {
