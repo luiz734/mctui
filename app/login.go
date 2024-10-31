@@ -19,6 +19,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/reflow/wordwrap"
 )
 
 // Login screen
@@ -59,9 +60,9 @@ func InitialLoginModel() loginModel {
 	pi.PlaceholderStyle = lipgloss.NewStyle().Foreground(colors.Surface1)
 	pi.PromptStyle = lipgloss.NewStyle().Foreground(colors.Pink)
 
-    // Use for debug only
-    ui.SetValue("admin")
-    pi.SetValue("adminpass123")
+	// Use for debug only
+	ui.SetValue("admin")
+	pi.SetValue("adminpass123")
 
 	return loginModel{
 		usernameInput: ui,
@@ -80,13 +81,26 @@ func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.Type {
-		case tea.KeyCtrlC:
+		// User always can quit
+		if msg.Type == tea.KeyCtrlC {
 			return m, tea.Quit
+		}
+
+		if m.err != nil {
+			// When user press any key on the error screen
+			m.err = nil
+			m = m.clearForm()
+			return m, nil
+		}
+		switch msg.Type {
 		case tea.KeyEnter:
 			username := m.usernameInput.Value()
 			password := m.passwordInput.Value()
 
+			// Don't change focus if username is empty
+			if username == "" {
+				return m, nil
+			}
 			// Focus password if still empty
 			if m.focusUsername && password == "" {
 				m.passwordInput.Focus()
@@ -94,7 +108,10 @@ func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focusUsername = !m.focusUsername
 				return m, nil
 			}
-
+			// Don't make the request with empty password
+			if password == "" {
+				return m, nil
+			}
 			return m, func() tea.Msg {
 				// Returns an authMsg
 				return requestAuthenticateUser(username, password)
@@ -112,15 +129,12 @@ func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case authMsg:
 		if msg.err != nil {
-			log.Printf("Can't login: %v", msg.err)
-			return m, tea.Quit
+			m.err = fmt.Errorf("Can't login: %v", msg.err)
+			log.Printf("%v", m.err)
+			// return m, tea.Quit
 		}
 		// Clear forms now. Then, when session expires, it is already clear
-		m.usernameInput.Focus()
-		m.usernameInput.SetValue("")
-		m.passwordInput.Blur()
-		m.passwordInput.SetValue("")
-		m.focusUsername = true
+		m.clearForm()
 
 		// Authentication works
 		if msg.sucess {
@@ -146,7 +160,40 @@ func (m loginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m loginModel) clearForm() loginModel {
+	m.usernameInput.Focus()
+	m.usernameInput.SetValue("")
+	m.passwordInput.Blur()
+	m.passwordInput.SetValue("")
+	m.focusUsername = true
+	return m
+}
+
+func (m loginModel) ErrorView() string {
+	centerWrapper := lipgloss.NewStyle().Align(lipgloss.Center, lipgloss.Center).Width(m.width - 2).Height(m.height - 2)
+
+	errTitle := lipgloss.NewStyle().
+		Foreground(colors.Pink).
+		Bold(true).
+		Render("\n\nError trying to login\n")
+
+	errDescription := lipgloss.NewStyle().
+		Foreground(colors.Surface2).
+		Align(lipgloss.Center).
+		Render(wordwrap.String(fmt.Sprintf("\n%v", m.err), m.width-12))
+		// Render("bar")
+
+	both := lipgloss.JoinVertical(lipgloss.Center, errTitle, errDescription)
+	return centerWrapper.Render(both)
+}
+
 func (m loginModel) View() string {
+	if m.err != nil {
+		return m.ErrorView()
+	}
+
+	centerWrapper := lipgloss.NewStyle().Align(lipgloss.Center, lipgloss.Center).Width(m.width - 2).Height(m.height - 3)
+
 	labelStye := lipgloss.NewStyle().Foreground(colors.Pink)
 	usernameLabel := labelStye.Render(fmt.Sprintf("%s", "username"))
 	username := fmt.Sprintf("%s%s", usernameLabel, m.usernameInput.View())
@@ -163,8 +210,6 @@ func (m loginModel) View() string {
 		PaddingRight(2).
 		Align(lipgloss.Center)
 	both := lipgloss.JoinVertical(lipgloss.Center, username, password)
-	centerWrapper := lipgloss.NewStyle().Align(lipgloss.Center, lipgloss.Center).Width(m.width - 2).Height(m.height - 3)
-
 	return fmt.Sprintf("%s\n", centerWrapper.Render(style.Render(both)))
 }
 

@@ -23,7 +23,7 @@ _I will improve the documentation over time._
 
 ## Running
 
-There are no setup for the client. Just run the executable with the necessary parameters:
+There are no setup for the client. Just run the executable with the required parameters:
 
 ```bash
 mctui --host=127.0.0.1 --port=8090
@@ -33,8 +33,8 @@ mctui --host=127.0.0.1 --port=8090
 
 - You can use the batch files provided to make it easier to execute
 - Edit them once to set the appropriate `host` and `port`
-- Then, double click to open in your terminal.
-- It uses cmd by default.
+- Then, double click to open in your terminal
+- It uses cmd by default
 
 ## Usage
 
@@ -61,3 +61,11 @@ Tasks are special commands that starts with `!`, so the backend can tell the dif
 
 - `!backup` make a backups of the curent save
 - `!restore` pick a restore point
+
+> It's not mandatory, but I really recommmend all players leave the server before use !backup
+
+## Troubleshooting
+- Use the environment variable `DEBUG=1`
+- It will create a `debug.log` file in the same directory of the binary
+- `DEBUG=1 mctui --host=127.0.0.1 --port=8090`
+- On windows, there is a `run-debug.bat` for the same porpouse
